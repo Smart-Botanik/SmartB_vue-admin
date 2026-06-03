@@ -13,6 +13,17 @@ export type VueMenuSection = {
 /** In-app routes for the Vue admin (meta platform + future migrations). */
 export const VUE_MENU_SECTIONS: VueMenuSection[] = [
   {
+    key: "taxonomy",
+    title: "Таксономия",
+    items: [
+      {
+        key: "/entities/taxonomy",
+        label: "Справочник таксономии",
+        path: "/entities/taxonomy",
+      },
+    ],
+  },
+  {
     key: "meta",
     title: "Meta Platform",
     items: [

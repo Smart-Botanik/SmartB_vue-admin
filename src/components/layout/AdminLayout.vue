@@ -19,6 +19,7 @@ import {
   LinkOutlined,
   AppstoreOutlined,
   DeploymentUnitOutlined,
+  TagsOutlined,
 } from "@ant-design/icons-vue";
 import {
   VUE_TO_REACT_MENU,
@@ -42,10 +43,15 @@ const openKeys = ref<string[]>(["section-meta", "section-roadmap", "section-reac
 const menuItems = computed(() => {
   const internalSections = VUE_MENU_SECTIONS.map((section) => ({
     key: `section-${section.key}`,
-    icon: () =>
-      section.key === "meta"
-        ? h(DeploymentUnitOutlined)
-        : h(AppstoreOutlined),
+    icon: () => {
+      if (section.key === "taxonomy") {
+        return h(TagsOutlined);
+      }
+      if (section.key === "meta") {
+        return h(DeploymentUnitOutlined);
+      }
+      return h(AppstoreOutlined);
+    },
     label: section.title,
     children: section.items.map((item) => ({
       key: item.path,
@@ -82,7 +88,8 @@ const menuItems = computed(() => {
   ];
 });
 
-function onMenuClick({ key }: { key: string }) {
+function onMenuClick(info: { key: string | number }) {
+  const key = String(info.key);
   if (key.startsWith("ext-") || !key.startsWith("/")) {
     return;
   }

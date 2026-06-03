@@ -30,6 +30,15 @@ export interface LoginResponse {
   jwt: string;
 }
 
+export interface RefreshTokenRequest {
+  refreshToken: string;
+}
+
+export interface RefreshTokenResponse {
+  accessToken: string;
+  expiresAt: number;
+}
+
 export interface JwtPayload {
   sub: string;
   email: string;

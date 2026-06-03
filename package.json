@@ -7,7 +7,7 @@
     "dev": "vite --mode development",
     "build": "vue-tsc --noEmit && vite build --mode production",
     "preview": "vite preview",
-    "type-check": "vue-tsc -b --noEmit"
+    "type-check": "vue-tsc --noEmit"
   },
   "dependencies": {
     "@ant-design/icons-vue": "^7.0.1",

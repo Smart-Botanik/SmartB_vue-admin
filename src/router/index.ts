@@ -21,6 +21,15 @@ const router = createRouter({
           component: () => import("@/pages/DashboardPage.vue"),
         },
         {
+          path: "entities/taxonomy",
+          name: "taxonomy-directory",
+          component: () => import("@/pages/taxonomy/TaxonomyDirectoryPage.vue"),
+        },
+        {
+          path: "content/taxonomy",
+          redirect: { name: "taxonomy-directory" },
+        },
+        {
           path: "meta",
           name: "meta-hub",
           component: () => import("@/pages/meta/MetaHubPage.vue"),
