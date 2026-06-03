@@ -27,6 +27,14 @@ npm install
 npm run dev
 ```
 
+### Smoke (таксономия)
+
+```powershell
+$env:SMOKE_ADMIN_IDENTIFIER="admin@..."
+$env:SMOKE_ADMIN_PASSWORD="..."
+npm run smoke:taxonomy
+```
+
 Зависимости ставятся через **Verdaccio** (`registry=http://localhost:4873/`, см. `.npmrc`). Перед `npm install` registry должен быть запущен.
 
 ## Commit и push

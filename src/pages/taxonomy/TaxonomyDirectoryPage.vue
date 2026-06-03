@@ -30,9 +30,12 @@ import {
   TAXONOMY_TAG_NAMESPACE_OPTIONS,
   taxonomyTagNamespaceLabel,
 } from "@/types/content";
+import { getAdminReactBaseUrl } from "@growing/admin-shell";
 import { flattenForest, isIntentionalRoot } from "./taxonomyDirectoryUtils";
 
 const { Title, Text } = Typography;
+
+const reactFlatTagsHref = `${getAdminReactBaseUrl()}/content/taxonomy-tags`;
 
 const scopes = ref<TaxonomyScope[]>([]);
 const activeScopeKey = ref("crop");
@@ -266,7 +269,12 @@ const childColumns: ColumnsType<TaxonomyTag> = [
   <Space direction="vertical" size="large" style="width: 100%">
     <Space align="center" style="width: 100%; justify-content: space-between">
       <Title :level="3" style="margin: 0">Справочник таксономии</Title>
-      <Button @click="scopeModalOpen = true">Добавить раздел</Button>
+      <Space>
+        <a :href="reactFlatTagsHref" target="_blank" rel="noopener noreferrer">
+          Плоский список (React)
+        </a>
+        <Button @click="scopeModalOpen = true">Добавить раздел</Button>
+      </Space>
     </Space>
 
     <Tabs

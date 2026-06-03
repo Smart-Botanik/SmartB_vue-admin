@@ -7,7 +7,8 @@
     "dev": "vite --mode development",
     "build": "vue-tsc --noEmit && vite build --mode production",
     "preview": "vite preview",
-    "type-check": "vue-tsc --noEmit"
+    "type-check": "vue-tsc --noEmit",
+    "smoke:taxonomy": "node scripts/smoke-taxonomy.mjs"
   },
   "dependencies": {
     "@ant-design/icons-vue": "^7.0.1",
