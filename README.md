@@ -27,6 +27,8 @@ npm install
 npm run dev
 ```
 
+Зависимости ставятся через **Verdaccio** (`registry=http://localhost:4873/`, см. `.npmrc`). Перед `npm install` registry должен быть запущен.
+
 ## Commit и push
 
 Только из `admin-vue/` (монорепо папку не коммитит):
