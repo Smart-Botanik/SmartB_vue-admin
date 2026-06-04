@@ -2,8 +2,15 @@ import { defineConfig, loadEnv } from "vite";
 import vue from "@vitejs/plugin-vue";
 import path from "path";
 
+/** Avoid Node resolving `localhost` to IPv6 `::1` when Nest listens on IPv4 only. */
+function resolveProxyTarget(raw?: string): string {
+  const value = raw?.trim() || "http://127.0.0.1:3001";
+  return value.replace(/^http:\/\/localhost(?=[:/]|$)/i, "http://127.0.0.1");
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
+  const apiTarget = resolveProxyTarget(env.VITE_API_URL);
 
   return {
     plugins: [vue()],
@@ -21,13 +28,23 @@ export default defineConfig(({ mode }) => {
       host: true,
       cors: true,
       proxy: {
+        "/auth": {
+          target: apiTarget,
+          changeOrigin: true,
+          secure: false,
+        },
         "/api": {
-          target: env.VITE_API_URL || "http://localhost:3001",
+          target: apiTarget,
           changeOrigin: true,
           secure: false,
         },
         "/graphql": {
-          target: env.VITE_API_URL || "http://localhost:3001",
+          target: apiTarget,
+          changeOrigin: true,
+          secure: false,
+        },
+        "/uploads": {
+          target: apiTarget,
           changeOrigin: true,
           secure: false,
         },
