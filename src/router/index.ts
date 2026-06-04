@@ -30,6 +30,10 @@ const router = createRouter({
           redirect: { name: "taxonomy-directory" },
         },
         {
+          path: "content/taxonomy-tags",
+          redirect: { name: "taxonomy-directory" },
+        },
+        {
           path: "meta",
           name: "meta-hub",
           component: () => import("@/pages/meta/MetaHubPage.vue"),

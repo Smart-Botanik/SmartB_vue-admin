@@ -1,26 +1,46 @@
-import { onMounted, watch } from "vue";
+import { storeToRefs } from "pinia";
+import { onMounted } from "vue";
+import { message } from "ant-design-vue";
 
-import { useAdminStore } from "@/store/useAdminStore";
+import { useTaxonomyStore } from "@/stores/taxonomyStore";
 
 export function useTaxonomyDirectoryBootstrap() {
-  const store = useAdminStore();
-
-  async function reloadDirectory() {
-    await store.fetchTaxonomyDirectory();
-  }
+  const taxonomy = useTaxonomyStore();
+  const {
+    scopeSections,
+    loading,
+    directoriesLoaded,
+    error,
+    selectedGroup,
+    selectedScopeKey,
+    selectedGroupId,
+    scopes,
+    scopeDirectories,
+  } = storeToRefs(taxonomy);
 
   onMounted(async () => {
-    await store.fetchTaxonomyScopes();
-    await store.fetchTaxonomyDirectory();
+    try {
+      await taxonomy.bootstrapTaxonomyDirectory();
+    } catch (err) {
+      message.error(
+        err instanceof Error
+          ? err.message
+          : "Ошибка загрузки справочника таксономии",
+      );
+    }
   });
 
-  watch(
-    () => store.taxonomyUi.activeScopeKey,
-    () => {
-      store.selectGroup(null);
-      void reloadDirectory();
-    },
-  );
-
-  return { store, reloadDirectory };
+  return {
+    taxonomy,
+    scopeSections,
+    loading,
+    directoriesLoaded,
+    error,
+    selectedGroup,
+    selectedScopeKey,
+    selectedGroupId,
+    scopes,
+    scopeDirectories,
+    reloadDirectory: () => taxonomy.bootstrapTaxonomyDirectory(),
+  };
 }

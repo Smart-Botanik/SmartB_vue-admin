@@ -1,5 +1,7 @@
 export type TaxonomyTagNamespace = "CROP" | "CROP_VARIANT" | "TOPIC" | "PRODUCT_USE";
 
+export type CropKind = "TOMATO" | "ZUCCHINI" | "EGGPLANT" | "CUCUMBER";
+
 export type TaxonomyTagStatus = "ACTIVE" | "DEPRECATED";
 
 export type TaxonomyScope = {
@@ -26,6 +28,13 @@ export type TaxonomyTag = {
   children?: TaxonomyTag[];
   childIds?: string[];
 };
+
+export const CROP_KIND_OPTIONS: Array<{ value: CropKind; label: string }> = [
+  { value: "TOMATO", label: "Помидоры" },
+  { value: "ZUCCHINI", label: "Кабачки" },
+  { value: "EGGPLANT", label: "Баклажаны" },
+  { value: "CUCUMBER", label: "Огурцы" },
+];
 
 export const TAXONOMY_TAG_NAMESPACE_OPTIONS: Array<{
   value: TaxonomyTagNamespace;

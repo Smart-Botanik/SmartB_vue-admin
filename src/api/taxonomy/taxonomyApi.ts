@@ -13,7 +13,7 @@ const TAXONOMY_TAG_FIELDS = `
 `;
 
 const TAXONOMY_TAG_TREE_FIELDS = `
-  id scopeKey key namespace label sortOrder parentId cropKind variantAxis status childIds
+  id scopeKey key namespace label sortOrder parentId variantAxis status childIds
   children {
     id scopeKey key namespace label sortOrder parentId status childIds
     children {
@@ -52,8 +52,8 @@ export type UpdateTaxonomyTagInput = {
   status?: TaxonomyTagStatus | null;
 };
 
-export const contentService = {
-  async listTaxonomyScopes() {
+export const taxonomyApi = {
+  async listScopes(): Promise<TaxonomyScope[]> {
     const data = await graphqlClient.request<{ taxonomyScopes: TaxonomyScope[] }>({
       query: `query TaxonomyScopes { taxonomyScopes { key label description sortOrder } }`,
       operationName: "TaxonomyScopes",
@@ -61,7 +61,7 @@ export const contentService = {
     return data.taxonomyScopes;
   },
 
-  async createTaxonomyScope(input: CreateTaxonomyScopeInput) {
+  async createScope(input: CreateTaxonomyScopeInput): Promise<TaxonomyScope> {
     const data = await graphqlClient.request<
       { createTaxonomyScope: TaxonomyScope },
       { input: CreateTaxonomyScopeInput }
@@ -75,7 +75,7 @@ export const contentService = {
     return data.createTaxonomyScope;
   },
 
-  async taxonomyForest(scopeKey: string) {
+  async fetchForest(scopeKey: string): Promise<TaxonomyTag[]> {
     const data = await graphqlClient.request<
       { taxonomyForest: TaxonomyTag[] },
       { scopeKey: string }
@@ -89,45 +89,29 @@ export const contentService = {
     return data.taxonomyForest;
   },
 
-  async listTaxonomyTags(params: {
-    scopeKey?: string;
-    parentId?: string | null;
-    limit?: number;
-    offset?: number;
-    namespace?: TaxonomyTagNamespace;
-    status?: TaxonomyTagStatus | null;
-  }) {
+  async listRootTags(scopeKey: string): Promise<TaxonomyTag[]> {
     const data = await graphqlClient.request<
       { taxonomyTags: { total: number; items: TaxonomyTag[] } },
-      typeof params
+      { scopeKey: string; parentId: null; limit: number; offset: number }
     >({
-      query: `query TaxonomyTags(
-        $scopeKey: String
-        $parentId: ID
-        $limit: Int
-        $offset: Int
-        $namespace: TaxonomyTagNamespace
-        $status: TaxonomyTagStatus
-      ) {
+      query: `query TaxonomyTags($scopeKey: String, $parentId: ID, $limit: Int, $offset: Int) {
         taxonomyTags(
           scopeKey: $scopeKey
           parentId: $parentId
           limit: $limit
           offset: $offset
-          namespace: $namespace
-          status: $status
         ) {
           total
           items { ${TAXONOMY_TAG_FIELDS} }
         }
       }`,
-      variables: params,
+      variables: { scopeKey, parentId: null, limit: 500, offset: 0 },
       operationName: "TaxonomyTags",
     });
-    return data.taxonomyTags;
+    return data.taxonomyTags.items;
   },
 
-  async createTaxonomyTag(input: CreateTaxonomyTagInput) {
+  async createTag(input: CreateTaxonomyTagInput): Promise<TaxonomyTag> {
     const data = await graphqlClient.request<
       { createTaxonomyTag: TaxonomyTag },
       { input: CreateTaxonomyTagInput }
@@ -141,7 +125,7 @@ export const contentService = {
     return data.createTaxonomyTag;
   },
 
-  async updateTaxonomyTag(id: string, input: UpdateTaxonomyTagInput) {
+  async updateTag(id: string, input: UpdateTaxonomyTagInput): Promise<TaxonomyTag> {
     const data = await graphqlClient.request<
       { updateTaxonomyTag: TaxonomyTag },
       { id: string; input: UpdateTaxonomyTagInput }
@@ -155,7 +139,7 @@ export const contentService = {
     return data.updateTaxonomyTag;
   },
 
-  async deleteTaxonomyTag(id: string) {
+  async deleteTag(id: string): Promise<boolean> {
     const data = await graphqlClient.request<
       { deleteTaxonomyTag: boolean },
       { id: string }
@@ -167,11 +151,11 @@ export const contentService = {
     return data.deleteTaxonomyTag;
   },
 
-  async deleteTaxonomyGroup(
+  async deleteGroup(
     id: string,
     strategy: TaxonomyGroupDeleteStrategy,
     newParentId?: string | null,
-  ) {
+  ): Promise<boolean> {
     const data = await graphqlClient.request<
       { deleteTaxonomyGroup: boolean },
       { id: string; strategy: TaxonomyGroupDeleteStrategy; newParentId?: string | null }

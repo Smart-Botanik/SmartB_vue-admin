@@ -1,17 +1,18 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
-import { Observer } from "mobx-vue-lite";
+import { computed, reactive, ref, watch } from "vue";
 import {
+  Alert,
   Button,
   Card,
+  Collapse,
   Form,
   Input,
   Modal,
+  Popconfirm,
   Radio,
   Select,
   Space,
   Table,
-  Tabs,
   Tag,
   Typography,
   message,
@@ -24,44 +25,82 @@ import type {
   TaxonomyTag,
   TaxonomyTagNamespace,
 } from "@/types/content";
-import {
-  DELETE_STRATEGY_LABELS,
-  taxonomyTagNamespaceLabel,
-} from "@/types/content";
-import { getAdminReactBaseUrl } from "@growing/admin-shell";
+import { DELETE_STRATEGY_LABELS, taxonomyTagNamespaceLabel } from "@/types/content";
 import {
   childCreateButtonLabel,
   createTagModalTitle,
-  cultureParentOptions,
+  groupParentOptions,
   defaultNamespaceForCreate,
   flattenForest,
   hierarchyHint,
-  isIntentionalRoot,
+  isDeletableAsGroup,
   isNamespaceLocked,
   rootCreateButtonLabel,
+  showVariantAxisField,
+  formatCreateTaxonomyTagError,
+  getCreateTagKeyValidationError,
+  initialCreateTagKeyInput,
+  createTagNamespaceDisplayLabel,
+  resolveCreateTagApiParentId,
+  resolveCreateTagFullKey,
+  scopeKeyDotPrefix,
+  taxonomyCreateKeyPrefix,
 } from "./taxonomyDirectoryUtils";
 
 const { Title, Text } = Typography;
 
-const reactFlatTagsHref = `${getAdminReactBaseUrl()}/content/taxonomy-tags`;
-
-const { store } = useTaxonomyDirectoryBootstrap();
+const {
+  taxonomy,
+  scopeSections,
+  loading,
+  directoriesLoaded,
+  error,
+  selectedGroup,
+  selectedScopeKey,
+  selectedGroupId,
+} = useTaxonomyDirectoryBootstrap();
 
 const tagModalOpen = ref(false);
 const assignModalOpen = ref(false);
 const scopeModalOpen = ref(false);
 const deleteModalOpen = ref(false);
+const actionScopeKey = ref("crop");
 const createParentId = ref<string | null>(null);
 const deleteStrategy = ref<TaxonomyGroupDeleteStrategy>("PROMOTE_TO_ROOT");
 const deleteNewParentId = ref<string | undefined>();
 const assignTag = ref<TaxonomyTag | null>(null);
 const assignParentId = ref<string | undefined>();
 
+/** Ключи разделов, у которых раскрыта таблица корневой иерархии (групп). */
+const hierarchyCollapseKeys = ref<string[]>([]);
+
+/** Синхронизация activeKey только при смене списка разделов (не при перезагрузке дерева). */
+watch(
+  () => scopeSections.value.map(section => section.scope.key).join("\0"),
+  () => {
+    const keys = scopeSections.value.map(section => section.scope.key);
+    const open = new Set(hierarchyCollapseKeys.value);
+    hierarchyCollapseKeys.value = keys.filter(key => open.has(key));
+  },
+  { immediate: true },
+);
+
 const tagForm = reactive({
   key: "",
   namespace: "CROP" as TaxonomyTagNamespace,
   label: "",
+  variantAxis: "",
 });
+
+const tagFormKeyError = ref<string | undefined>();
+
+function clearTagFormKeyError() {
+  tagFormKeyError.value = undefined;
+}
+
+function setTagFormKeyError(error: string) {
+  tagFormKeyError.value = error;
+}
 
 const scopeForm = reactive({
   key: "",
@@ -69,94 +108,153 @@ const scopeForm = reactive({
   description: "",
 });
 
-function activeScope() {
-  return store.taxonomyUi.scopes.find(
-    scope => scope.key === store.taxonomyUi.activeScopeKey,
-  );
+function scopeLabel(scopeKey: string): string {
+  return taxonomy.scopes.find(scope => scope.key === scopeKey)?.label ?? scopeKey;
 }
 
-function hierarchyRoots() {
-  return store.taxonomyUi.forestTree.filter(tag =>
-    isIntentionalRoot(tag, store.taxonomyUi.activeScopeKey),
-  );
+function flatTagsForScope(scopeKey: string): TaxonomyTag[] {
+  const directory = taxonomy.directoryForScope(scopeKey);
+  return flattenForest(directory?.forestTree ?? []);
 }
 
-function flatTags() {
-  return flattenForest(store.taxonomyUi.forestTree);
-}
-
-function groupChildren() {
-  const group = store.selectedGroup;
+function groupChildren(): TaxonomyTag[] {
+  const group = selectedGroup.value;
   if (!group) {
     return [];
   }
-  return flatTags().filter(tag => tag.parentId === group.id);
+  return flatTagsForScope(group.scopeKey).filter(tag => tag.parentId === group.id);
 }
 
-function parentOptions() {
-  return flatTags()
+function parentOptionsForScope(scopeKey: string) {
+  return flatTagsForScope(scopeKey)
     .filter(tag => (tag.childIds?.length ?? tag.children?.length ?? 0) > 0)
     .map(tag => ({ value: tag.id, label: `${tag.label} (${tag.key})` }));
 }
 
-function assignParentOptions() {
-  return cultureParentOptions(flatTags(), store.taxonomyUi.activeScopeKey);
-}
-
 const tagModalTitle = computed(() =>
-  createTagModalTitle(store.taxonomyUi.activeScopeKey, createParentId.value),
+  createTagModalTitle(actionScopeKey.value, createParentId.value),
+);
+
+const createTagKeyPrefix = computed(() => {
+  const scopeKey = actionScopeKey.value;
+  const parent = createParentId.value
+    ? flatTagsForScope(scopeKey).find(tag => tag.id === createParentId.value)
+    : undefined;
+  return taxonomyCreateKeyPrefix(parent, scopeKey);
+});
+
+const createTagKeyDotPrefix = computed(() => scopeKeyDotPrefix(createTagKeyPrefix.value));
+
+const createTagKeyPreview = computed(() => {
+  const fullKey = resolveCreateTagFullKey(
+    tagForm.key,
+    createTagKeyPrefix.value,
+    createParentId.value != null,
+  );
+  return fullKey ?? `${createTagKeyDotPrefix.value}…`;
+});
+
+const createTagKeyHelp = computed(() => {
+  if (tagFormKeyError.value) {
+    return tagFormKeyError.value;
+  }
+  return `Dot-нотация: полный ключ будет «${createTagKeyPreview.value}». Допишите сегмент после «${createTagKeyDotPrefix.value}»`;
+});
+
+const createTagKeyPlaceholder = computed(() =>
+  createParentId.value
+    ? "determinate"
+    : actionScopeKey.value === "crop"
+      ? "tomato"
+      : "topic",
 );
 
 const namespaceLocked = computed(() =>
-  isNamespaceLocked(store.taxonomyUi.activeScopeKey, createParentId.value),
+  isNamespaceLocked(actionScopeKey.value, createParentId.value),
 );
 
 const lockedNamespaceLabel = computed(() =>
-  taxonomyTagNamespaceLabel(tagForm.namespace),
+  createTagNamespaceDisplayLabel(
+    actionScopeKey.value,
+    tagForm.namespace,
+    createParentId.value != null,
+  ),
 );
 
-function onScopeTabChange(key: string | number) {
-  store.setActiveScopeKey(String(key));
-}
-
-function openCreateTag(parentId: string | null) {
+function openCreateTag(scopeKey: string, parentId: string | null) {
+  actionScopeKey.value = scopeKey;
   createParentId.value = parentId;
-  tagForm.key = "";
+  const parent = parentId
+    ? flatTagsForScope(scopeKey).find(tag => tag.id === parentId)
+    : undefined;
+  const keyPrefix = taxonomyCreateKeyPrefix(parent, scopeKey);
+  tagForm.key = initialCreateTagKeyInput(parentId, keyPrefix);
   tagForm.label = "";
-  tagForm.namespace = defaultNamespaceForCreate(
-    store.taxonomyUi.activeScopeKey,
-    parentId,
-  );
+  tagForm.variantAxis = "";
+  tagForm.namespace = defaultNamespaceForCreate(scopeKey, parentId, parent);
+  clearTagFormKeyError();
   tagModalOpen.value = true;
 }
 
 async function onCreateTag() {
+  const scopeKey = actionScopeKey.value;
+  const flatTags = flatTagsForScope(scopeKey);
   const parent = createParentId.value
-    ? flatTags().find(tag => tag.id === createParentId.value)
+    ? flatTags.find(tag => tag.id === createParentId.value)
     : undefined;
-  const keyPrefix = parent?.key ?? store.taxonomyUi.activeScopeKey;
-  const segment = tagForm.key.trim().replace(/^\./, "");
-  const fullKey = segment.includes(".") ? segment : `${keyPrefix}.${segment}`;
+  const keyError = getCreateTagKeyValidationError(
+    tagForm.key,
+    parent,
+    scopeKey,
+    createParentId.value,
+  );
+  if (keyError) {
+    setTagFormKeyError(keyError);
+    return;
+  }
+  const keyPrefix = taxonomyCreateKeyPrefix(parent, scopeKey);
+  const fullKey = resolveCreateTagFullKey(
+    tagForm.key,
+    keyPrefix,
+    createParentId.value != null,
+  );
+  if (!fullKey) {
+    setTagFormKeyError(
+      `Укажите сегмент ключа после «${scopeKeyDotPrefix(taxonomyCreateKeyPrefix(parent, scopeKey))}»`,
+    );
+    return;
+  }
+  const apiParentId = resolveCreateTagApiParentId(parent);
+  if (createParentId.value && !apiParentId) {
+    setTagFormKeyError("Не выбран родитель для подтега");
+    return;
+  }
+  clearTagFormKeyError();
   try {
-    await store.createTaxonomyTag({
-      scopeKey: store.taxonomyUi.activeScopeKey,
+    await taxonomy.createTaxonomyTag({
+      scopeKey,
       key: fullKey,
       namespace: tagForm.namespace,
       label: tagForm.label.trim(),
       sortOrder: 0,
-      parentId: createParentId.value,
+      parentId: apiParentId,
+      cropKind: null,
+      variantAxis:
+        tagForm.namespace === "CROP_VARIANT" && tagForm.variantAxis.trim()
+          ? tagForm.variantAxis.trim()
+          : null,
     });
     message.success("Тег создан");
     tagModalOpen.value = false;
   } catch (error) {
-    message.error(error instanceof Error ? error.message : "Ошибка сохранения");
+    setTagFormKeyError(formatCreateTaxonomyTagError(error, parent));
   }
 }
 
 async function onCreateScope() {
   try {
-    await store.createTaxonomyScope({
-      key: scopeForm.key.trim(),
+    await taxonomy.createTaxonomyScope({
+      key: scopeForm.key.trim().toLowerCase(),
       label: scopeForm.label.trim(),
       description: scopeForm.description.trim() || null,
     });
@@ -167,7 +265,8 @@ async function onCreateScope() {
   }
 }
 
-function openAssignGroup(tag: TaxonomyTag) {
+function openAssignGroup(scopeKey: string, tag: TaxonomyTag) {
+  actionScopeKey.value = scopeKey;
   assignTag.value = tag;
   assignParentId.value = undefined;
   assignModalOpen.value = true;
@@ -175,15 +274,11 @@ function openAssignGroup(tag: TaxonomyTag) {
 
 async function onAssignGroup() {
   if (!assignTag.value || !assignParentId.value) {
-    message.warning(
-      store.taxonomyUi.activeScopeKey === "crop"
-        ? "Выберите культуру"
-        : "Выберите группу",
-    );
+    message.warning("Выберите родителя");
     return;
   }
   try {
-    await store.updateTaxonomyTag(assignTag.value.id, {
+    await taxonomy.updateTaxonomyTag(assignTag.value.id, {
       parentId: assignParentId.value,
     });
     message.success("Родитель назначен");
@@ -193,19 +288,40 @@ async function onAssignGroup() {
   }
 }
 
+const deleteGroupChildCount = computed(() => groupChildren().length);
+
+const deleteGroupHasChildren = computed(() => deleteGroupChildCount.value > 0);
+
+function openDeleteGroupModal(scopeKey: string, tag: TaxonomyTag) {
+  taxonomy.selectGroup(scopeKey, tag.id);
+  deleteStrategy.value = "CASCADE";
+  deleteNewParentId.value = undefined;
+  deleteModalOpen.value = true;
+}
+
+function closeDeleteGroupModal() {
+  deleteModalOpen.value = false;
+  deleteNewParentId.value = undefined;
+}
+
 async function onDeleteGroup() {
-  const group = store.selectedGroup;
+  const group = selectedGroup.value;
   if (!group) {
     return;
   }
+  const strategy = deleteGroupHasChildren.value ? deleteStrategy.value : "CASCADE";
+  if (strategy === "REASSIGN" && !deleteNewParentId.value) {
+    message.warning("Выберите группу для переноса подтегов");
+    return;
+  }
   try {
-    await store.deleteTaxonomyGroup(
+    await taxonomy.deleteTaxonomyGroup(
       group.id,
-      deleteStrategy.value,
-      deleteStrategy.value === "REASSIGN" ? deleteNewParentId.value : null,
+      strategy,
+      strategy === "REASSIGN" ? deleteNewParentId.value : null,
     );
-    message.success("Группа удалена");
-    deleteModalOpen.value = false;
+    message.success("Удалено");
+    closeDeleteGroupModal();
   } catch (error) {
     message.error(error instanceof Error ? error.message : "Ошибка удаления");
   }
@@ -213,7 +329,7 @@ async function onDeleteGroup() {
 
 async function deleteTag(id: string) {
   try {
-    await store.deleteTaxonomyTag(id);
+    await taxonomy.deleteTaxonomyTag(id);
     message.success("Удалено");
   } catch (error) {
     message.error(error instanceof Error ? error.message : "Ошибка");
@@ -222,6 +338,10 @@ async function deleteTag(id: string) {
 
 function isGroup(record: TaxonomyTag) {
   return (record.childIds?.length ?? record.children?.length ?? 0) > 0;
+}
+
+function isGroupSelected(scopeKey: string, tagId: string) {
+  return selectedScopeKey.value === scopeKey && selectedGroupId.value === tagId;
 }
 
 const hierarchyColumns: ColumnsType<TaxonomyTag> = [
@@ -247,281 +367,348 @@ const childColumns: ColumnsType<TaxonomyTag> = [
 </script>
 
 <template>
-  <Observer>
-    <Space direction="vertical" size="large" style="width: 100%">
-    <Space align="center" style="width: 100%; justify-content: space-between">
-      <Title :level="3" style="margin: 0">Справочник таксономии</Title>
-      <Space>
-        <a :href="reactFlatTagsHref" target="_blank" rel="noopener noreferrer">
-          Плоский список (React)
-        </a>
+  <Space direction="vertical" size="large" style="width: 100%">
+      <Space align="center" style="width: 100%; justify-content: space-between">
+        <Title :level="3" style="margin: 0">Справочник таксономии</Title>
         <Button @click="scopeModalOpen = true">Добавить раздел</Button>
       </Space>
-    </Space>
 
-    <Text type="secondary">{{ hierarchyHint(store.taxonomyUi.activeScopeKey) }}</Text>
+      <Alert v-if="error" type="error" show-icon :message="error" />
 
-    <Tabs
-      v-if="store.taxonomyUi.scopes.length > 0"
-      :active-key="store.taxonomyUi.activeScopeKey"
-      :items="
-        store.taxonomyUi.scopes.map(scope => ({ key: scope.key, label: scope.label }))
-      "
-      @change="onScopeTabChange"
-    />
-
-    <Card
-      :title="`Иерархия раздела «${activeScope()?.label ?? store.taxonomyUi.activeScopeKey}»`"
-    >
-      <template #extra>
-        <Button type="primary" @click="openCreateTag(null)">
-          {{ rootCreateButtonLabel(store.taxonomyUi.activeScopeKey) }}
-        </Button>
-      </template>
-      <Table
-        row-key="id"
-        :loading="store.taxonomyUi.loading"
-        :columns="hierarchyColumns"
-        :data-source="hierarchyRoots()"
-        :pagination="false"
-        :children-column-name="'children'"
-      >
-        <template #bodyCell="{ column, record: row }">
-          <template v-if="column.key === 'key'">
-            <Text code>{{ (row as TaxonomyTag).key }}</Text>
-          </template>
-          <template v-else-if="column.key === 'namespace'">
-            <Tag>{{ taxonomyTagNamespaceLabel((row as TaxonomyTag).namespace) }}</Tag>
-          </template>
-          <template v-else-if="column.key === 'actions'">
-            <Space size="small">
-              <Button
-                v-if="isGroup(row as TaxonomyTag)"
-                size="small"
-                :type="
-                  store.selectedGroup?.id === (row as TaxonomyTag).id ? 'primary' : 'default'
-                "
-                @click="store.selectGroup((row as TaxonomyTag).id)"
-              >
-                Состав
-              </Button>
-              <Button size="small" @click="openCreateTag((row as TaxonomyTag).id)">
-                {{ childCreateButtonLabel(store.taxonomyUi.activeScopeKey) }}
-              </Button>
-              <Button
-                v-if="isGroup(row as TaxonomyTag)"
-                size="small"
-                danger
-                @click="
-                  store.selectGroup((row as TaxonomyTag).id);
-                  deleteModalOpen = true;
-                "
-              >
-                Удалить группу
-              </Button>
-              <Button v-else size="small" danger @click="deleteTag((row as TaxonomyTag).id)">
-                Удалить
-              </Button>
-            </Space>
-          </template>
-        </template>
-      </Table>
-    </Card>
-
-    <Card
-      v-if="store.taxonomyUi.ungroupedTags.length > 0"
-      :title="`Несгруппированные теги (${store.taxonomyUi.ungroupedTags.length})`"
-    >
-      <template #extra>
-        <Text type="secondary">
-          {{
-            store.taxonomyUi.activeScopeKey === "crop"
-              ? "Подвид без культуры-родителя — привяжите к crop.* или удалите"
-              : "Теги без родителя — назначьте группу или удалите"
-          }}
-        </Text>
-      </template>
-      <Table
-        row-key="id"
-        :columns="ungroupedColumns"
-        :data-source="store.taxonomyUi.ungroupedTags"
-        :pagination="false"
-      >
-        <template #bodyCell="{ column, record: row }">
-          <template v-if="column.key === 'namespace'">
-            <Tag>{{ taxonomyTagNamespaceLabel((row as TaxonomyTag).namespace) }}</Tag>
-          </template>
-          <template v-else-if="column.key === 'key'">
-            <Text code>{{ (row as TaxonomyTag).key }}</Text>
-          </template>
-          <template v-else-if="column.key === 'actions'">
-            <Space size="small">
-              <Button size="small" type="primary" @click="openAssignGroup(row as TaxonomyTag)">
-                {{
-                  store.taxonomyUi.activeScopeKey === "crop"
-                    ? "Привязать к культуре"
-                    : "Назначить группу"
-                }}
-              </Button>
-              <Button size="small" danger @click="deleteTag((row as TaxonomyTag).id)">
-                Удалить
-              </Button>
-            </Space>
-          </template>
-        </template>
-      </Table>
-    </Card>
-
-    <Card v-if="store.selectedGroup" :title="`Состав группы «${store.selectedGroup.label}»`">
-      <template #extra>
-        <Space>
-          <Button @click="openCreateTag(store.selectedGroup!.id)">
-            {{ childCreateButtonLabel(store.taxonomyUi.activeScopeKey) }}
-          </Button>
-          <Button danger @click="deleteModalOpen = true">Удалить группу</Button>
-        </Space>
-      </template>
-      <Table
-        row-key="id"
-        :columns="childColumns"
-        :data-source="groupChildren()"
-        :pagination="false"
-      >
-        <template #bodyCell="{ column, record: row }">
-          <template v-if="column.key === 'namespace'">
-            <Tag>{{ taxonomyTagNamespaceLabel((row as TaxonomyTag).namespace) }}</Tag>
-          </template>
-          <template v-else-if="column.key === 'actions'">
-            <Button size="small" danger @click="deleteTag((row as TaxonomyTag).id)">
-              Удалить
-            </Button>
-          </template>
-        </template>
-        <template #emptyText>В этой группе пока нет подтегов.</template>
-      </Table>
-    </Card>
-
-    <Modal
-      :title="tagModalTitle"
-      :open="tagModalOpen"
-      @cancel="tagModalOpen = false"
-      @ok="onCreateTag"
-    >
-      <Form layout="vertical" @finish="onCreateTag">
-        <Form.Item label="Ключ (сегмент)" required>
-          <Input
-            v-model:value="tagForm.key"
-            :placeholder="
-              createParentId
-                ? 'determinate'
-                : store.taxonomyUi.activeScopeKey === 'crop'
-                  ? 'tomato'
-                  : 'topic.growing'
-            "
-          />
-          <Text type="secondary" style="font-size: 12px">
-            {{
-              createParentId
-                ? "Префикс — ключ родительской культуры (crop.tomato → crop.tomato.determinate)"
-                : "Префикс раздела или crop → полный ключ crop.<slug>"
-            }}
-          </Text>
-        </Form.Item>
-        <Form.Item v-if="namespaceLocked" label="Тип">
-          <Tag color="blue">{{ lockedNamespaceLabel }}</Tag>
-        </Form.Item>
-        <Form.Item label="Подпись" required>
-          <Input
-            v-model:value="tagForm.label"
-            :placeholder="
-              createParentId ? 'Детерминантный' : 'Томаты'
-            "
-          />
-        </Form.Item>
-      </Form>
-    </Modal>
-
-    <Modal
-      title="Новый раздел таксономии"
-      :open="scopeModalOpen"
-      @cancel="scopeModalOpen = false"
-      @ok="onCreateScope"
-    >
-      <Form layout="vertical">
-        <Form.Item label="Ключ" required>
-          <Input v-model:value="scopeForm.key" placeholder="product" />
-        </Form.Item>
-        <Form.Item label="Подпись" required>
-          <Input v-model:value="scopeForm.label" placeholder="Метки продуктов" />
-        </Form.Item>
-        <Form.Item label="Описание">
-          <Input.TextArea v-model:value="scopeForm.description" :rows="2" />
-        </Form.Item>
-      </Form>
-    </Modal>
-
-    <Modal
-      :title="
-        assignTag
-          ? store.taxonomyUi.activeScopeKey === 'crop'
-            ? `Привязать «${assignTag.label}» к культуре`
-            : `Назначить группу для «${assignTag.label}»`
-          : 'Назначить родителя'
-      "
-      :open="assignModalOpen"
-      ok-text="Сохранить"
-      @cancel="assignModalOpen = false"
-      @ok="onAssignGroup"
-    >
-      <Text type="secondary" style="display: block; margin-bottom: 12px">
-        {{
-          store.taxonomyUi.activeScopeKey === "crop"
-            ? "Выберите культуру (корневой CROP), под которую поместить подвид."
-            : `Выберите группу в разделе «${activeScope()?.label ?? store.taxonomyUi.activeScopeKey}».`
-        }}
-      </Text>
-      <Select
-        allow-clear
-        :placeholder="store.taxonomyUi.activeScopeKey === 'crop' ? 'Культура (crop.*)' : 'Группа-родитель'"
-        style="width: 100%"
-        :options="assignParentOptions()"
-        v-model:value="assignParentId"
+      <Alert
+        v-else-if="!directoriesLoaded && !loading"
+        type="warning"
+        show-icon
+        message="Иерархия не загружена"
+        description="Дерево тегов приходит из запроса MstTaxonomyForest (taxonomyForest), а не из MstTaxonomyScopes. Обновите страницу."
       />
-    </Modal>
 
-    <Modal
-      :title="
-        store.selectedGroup
-          ? `Удаление группы «${store.selectedGroup.label}»`
-          : 'Удаление группы'
-      "
-      :open="deleteModalOpen"
-      ok-text="Подтвердить"
-      :ok-button-props="{ danger: true }"
-      @cancel="deleteModalOpen = false"
-      @ok="onDeleteGroup"
-    >
-      <Text type="secondary" style="display: block; margin-bottom: 12px">
-        В группе {{ groupChildren().length }} подтег(ов). Выберите, что с ними сделать.
+      <Text type="secondary">
+        Каждый раздел — отдельная таблица корневых тегов и иерархии (данные taxonomyForest).
+        Разделы задаются кнопкой «Добавить раздел».
       </Text>
-      <Radio.Group v-model:value="deleteStrategy" style="display: flex; flex-direction: column; gap: 8px">
-        <Radio
-          v-for="key in (Object.keys(DELETE_STRATEGY_LABELS) as TaxonomyGroupDeleteStrategy[])"
-          :key="key"
-          :value="key"
+
+      <Collapse
+        v-if="scopeSections.length > 0"
+        v-model:activeKey="hierarchyCollapseKeys"
+        style="background: #fff"
+      >
+        <Collapse.Panel
+          v-for="section in scopeSections"
+          :key="section.scope.key"
+          :panel-key="section.scope.key"
         >
-          {{ DELETE_STRATEGY_LABELS[key] }}
-        </Radio>
-      </Radio.Group>
-      <Select
-        v-if="deleteStrategy === 'REASSIGN'"
-        allow-clear
-        placeholder="Новая группа"
-        style="width: 100%; margin-top: 12px"
-        :options="parentOptions().filter(o => o.value !== store.selectedGroup?.id)"
-        v-model:value="deleteNewParentId"
-      />
-    </Modal>
-    </Space>
-  </Observer>
+          <template #header>
+            <Space :size="8" @click.stop>
+              <span>Иерархия раздела «{{ section.scope.label }}»</span>
+              <Tag color="processing" style="margin: 0; font-family: monospace">
+                {{ scopeKeyDotPrefix(section.scope.key) }}
+              </Tag>
+            </Space>
+          </template>
+          <Text type="secondary" style="display: block; margin-bottom: 12px">
+            {{ hierarchyHint(section.scope.key) }}
+          </Text>
+          <Table
+            v-if="directoriesLoaded"
+            row-key="id"
+            :loading="loading"
+            :columns="hierarchyColumns"
+            :data-source="section.hierarchyRoots"
+            :pagination="false"
+            :children-column-name="'children'"
+            :default-expand-all-rows="true"
+          >
+              <template #headerCell="{ column }">
+                <template v-if="column.key === 'actions'">
+                  <Space :size="8">
+                    <span>Действия</span>
+                    <Button
+                      type="primary"
+                      size="small"
+                      @click.stop="openCreateTag(section.scope.key, null)"
+                    >
+                      {{ rootCreateButtonLabel(section.scope.key) }}
+                    </Button>
+                  </Space>
+                </template>
+              </template>
+              <template #bodyCell="{ column, record: row }">
+                <template v-if="column.key === 'key'">
+                  <Text code>{{ (row as TaxonomyTag).key }}</Text>
+                </template>
+                <template v-else-if="column.key === 'namespace'">
+                  <Tag>{{ taxonomyTagNamespaceLabel((row as TaxonomyTag).namespace) }}</Tag>
+                </template>
+                <template v-else-if="column.key === 'actions'">
+                  <Space size="small">
+                    <Button
+                      v-if="isGroup(row as TaxonomyTag)"
+                      size="small"
+                      :type="
+                        isGroupSelected(section.scope.key, (row as TaxonomyTag).id)
+                          ? 'primary'
+                          : 'default'
+                      "
+                      @click="taxonomy.selectGroup(section.scope.key, (row as TaxonomyTag).id)"
+                    >
+                      Состав
+                    </Button>
+                    <Button
+                      size="small"
+                      @click="openCreateTag(section.scope.key, (row as TaxonomyTag).id)"
+                    >
+                      {{ childCreateButtonLabel(section.scope.key) }}
+                    </Button>
+                    <Button
+                      v-if="isDeletableAsGroup(row as TaxonomyTag, section.scope.key)"
+                      size="small"
+                      danger
+                      @click="openDeleteGroupModal(section.scope.key, row as TaxonomyTag)"
+                    >
+                      {{
+                        isGroup(row as TaxonomyTag) ? "Удалить группу" : "Удалить"
+                      }}
+                    </Button>
+                    <Popconfirm
+                      v-else
+                      title="Удалить этот тег?"
+                      ok-text="Удалить"
+                      cancel-text="Отмена"
+                      @confirm="deleteTag((row as TaxonomyTag).id)"
+                    >
+                      <Button size="small" danger>Удалить</Button>
+                    </Popconfirm>
+                  </Space>
+                </template>
+              </template>
+          </Table>
+        </Collapse.Panel>
+      </Collapse>
+
+      <template v-for="section in scopeSections" :key="`ungrouped-${section.scope.key}`">
+        <Card
+          v-if="section.ungroupedTags.length > 0"
+          :title="`Несгруппированные — «${section.scope.label}» (${section.ungroupedTags.length})`"
+        >
+          <template #extra>
+            <Text type="secondary">
+              {{
+                section.scope.key === "crop"
+                  ? "Тег без родителя в crop — привяжите к узлу crop.* или удалите"
+                  : "Теги без родителя — назначьте группу или удалите"
+              }}
+            </Text>
+          </template>
+          <Table
+            row-key="id"
+            :columns="ungroupedColumns"
+            :data-source="section.ungroupedTags"
+            :pagination="false"
+          >
+            <template #bodyCell="{ column, record: row }">
+              <template v-if="column.key === 'namespace'">
+                <Tag>{{ taxonomyTagNamespaceLabel((row as TaxonomyTag).namespace) }}</Tag>
+              </template>
+              <template v-else-if="column.key === 'key'">
+                <Text code>{{ (row as TaxonomyTag).key }}</Text>
+              </template>
+              <template v-else-if="column.key === 'actions'">
+                <Space size="small">
+                  <Button
+                    size="small"
+                    type="primary"
+                    @click="openAssignGroup(section.scope.key, row as TaxonomyTag)"
+                  >
+                    Назначить родителя
+                  </Button>
+                  <Popconfirm
+                    title="Удалить этот тег?"
+                    ok-text="Удалить"
+                    cancel-text="Отмена"
+                    @confirm="deleteTag((row as TaxonomyTag).id)"
+                  >
+                    <Button size="small" danger>Удалить</Button>
+                  </Popconfirm>
+                </Space>
+              </template>
+            </template>
+          </Table>
+        </Card>
+      </template>
+
+      <Card
+        v-if="selectedGroup"
+        :title="`Состав группы «${selectedGroup.label}» (${scopeLabel(selectedGroup.scopeKey)})`"
+      >
+        <template #extra>
+          <Space>
+            <Button @click="openCreateTag(selectedGroup.scopeKey, selectedGroup.id)">
+              {{ childCreateButtonLabel(selectedGroup.scopeKey) }}
+            </Button>
+            <Button
+              danger
+              @click="openDeleteGroupModal(selectedGroup.scopeKey, selectedGroup)"
+            >
+              Удалить группу
+            </Button>
+          </Space>
+        </template>
+        <Table
+          row-key="id"
+          :columns="childColumns"
+          :data-source="groupChildren()"
+          :pagination="false"
+          :locale="{ emptyText: 'В этой группе пока нет подтегов.' }"
+        >
+          <template #bodyCell="{ column, record: row }">
+            <template v-if="column.key === 'namespace'">
+              <Tag>{{ taxonomyTagNamespaceLabel((row as TaxonomyTag).namespace) }}</Tag>
+            </template>
+            <template v-else-if="column.key === 'actions'">
+              <Popconfirm
+                title="Удалить этот тег?"
+                ok-text="Удалить"
+                cancel-text="Отмена"
+                @confirm="deleteTag((row as TaxonomyTag).id)"
+              >
+                <Button size="small" danger>Удалить</Button>
+              </Popconfirm>
+            </template>
+          </template>
+        </Table>
+      </Card>
+
+      <Modal
+        :title="tagModalTitle"
+        :open="tagModalOpen"
+        @cancel="tagModalOpen = false"
+        @ok="onCreateTag"
+      >
+        <Form layout="vertical" @finish="onCreateTag">
+          <Form.Item
+            label="Ключ (dot-нотация)"
+            required
+            :validate-status="tagFormKeyError ? 'error' : undefined"
+            :help="createTagKeyHelp"
+          >
+            <Input
+              v-model:value="tagForm.key"
+              @update:value="clearTagFormKeyError"
+              @press-enter="onCreateTag"
+              :placeholder="createTagKeyPlaceholder"
+            >
+              <template #addonAfter>
+                <Text code style="font-size: 12px">{{ createTagKeyPreview }}</Text>
+              </template>
+            </Input>
+          </Form.Item>
+          <Form.Item v-if="namespaceLocked" label="Тип">
+            <Tag color="blue">{{ lockedNamespaceLabel }}</Tag>
+          </Form.Item>
+          <Form.Item
+            v-if="showVariantAxisField(actionScopeKey, tagForm.namespace, createParentId)"
+            label="Ось варианта"
+          >
+            <Input
+              v-model:value="tagForm.variantAxis"
+              placeholder="growth_habit / pollination"
+              @press-enter="onCreateTag"
+            />
+          </Form.Item>
+          <Form.Item label="Подпись" required>
+            <Input
+              v-model:value="tagForm.label"
+              :placeholder="createParentId ? 'Подпись подтега' : 'Томаты'"
+              @press-enter="onCreateTag"
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        title="Новый раздел таксономии"
+        :open="scopeModalOpen"
+        @cancel="scopeModalOpen = false"
+        @ok="onCreateScope"
+      >
+        <Form layout="vertical">
+          <Form.Item label="Ключ" required>
+            <Input v-model:value="scopeForm.key" placeholder="product" />
+          </Form.Item>
+          <Form.Item label="Подпись" required>
+            <Input v-model:value="scopeForm.label" placeholder="Метки продуктов" />
+          </Form.Item>
+          <Form.Item label="Описание">
+            <Input.TextArea v-model:value="scopeForm.description" :rows="2" />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal
+        :title="
+          assignTag ? `Назначить родителя для «${assignTag.label}»` : 'Назначить родителя'
+        "
+        :open="assignModalOpen"
+        ok-text="Сохранить"
+        @cancel="assignModalOpen = false"
+        @ok="onAssignGroup"
+      >
+        <Text type="secondary" style="display: block; margin-bottom: 12px">
+          Раздел «{{ scopeLabel(actionScopeKey) }}».
+        </Text>
+        <Select
+          allow-clear
+          placeholder="Родитель (корневой тег раздела)"
+          style="width: 100%"
+          :options="groupParentOptions(flatTagsForScope(actionScopeKey), actionScopeKey)"
+          v-model:value="assignParentId"
+        />
+      </Modal>
+
+      <Modal
+        :title="
+          selectedGroup ? `Удаление группы «${selectedGroup.label}»` : 'Удаление группы'
+        "
+        :open="deleteModalOpen"
+        ok-text="Подтвердить"
+        :ok-button-props="{ danger: true }"
+        @cancel="closeDeleteGroupModal"
+        @ok="onDeleteGroup"
+      >
+        <template v-if="deleteGroupHasChildren">
+          <Text type="secondary" style="display: block; margin-bottom: 12px">
+            В группе {{ deleteGroupChildCount }} подтег(ов). Выберите, что с ними сделать.
+          </Text>
+          <Radio.Group
+            v-model:value="deleteStrategy"
+            style="display: flex; flex-direction: column; gap: 8px"
+          >
+            <Radio
+              v-for="key in (Object.keys(DELETE_STRATEGY_LABELS) as TaxonomyGroupDeleteStrategy[])"
+              :key="key"
+              :value="key"
+            >
+              {{ DELETE_STRATEGY_LABELS[key] }}
+            </Radio>
+          </Radio.Group>
+          <Select
+            v-if="deleteStrategy === 'REASSIGN' && selectedGroup"
+            allow-clear
+            placeholder="Новая группа"
+            style="width: 100%; margin-top: 12px"
+            :options="
+              parentOptionsForScope(selectedGroup.scopeKey).filter(
+                o => o.value !== selectedGroup?.id,
+              )
+            "
+            v-model:value="deleteNewParentId"
+          />
+        </template>
+        <Text v-else type="secondary">
+          У узла «{{ selectedGroup?.label }}» ({{ selectedGroup?.key }}) нет подтегов.
+          Удалить его из справочника?
+        </Text>
+      </Modal>
+  </Space>
 </template>
