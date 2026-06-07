@@ -10,6 +10,7 @@ import {
   Modal,
   Popconfirm,
   Radio,
+  Segmented,
   Select,
   Space,
   Table,
@@ -45,9 +46,16 @@ import {
   resolveCreateTagFullKey,
   scopeKeyDotPrefix,
   taxonomyCreateKeyPrefix,
+  isTaxonomyScopeTreeNode,
 } from "./taxonomyDirectoryUtils";
+import { TaxonomyGlobalGraphView } from "./TaxonomyGlobalGraphView";
 
 const { Title, Text } = Typography;
+
+type DirectoryViewMode = "tables" | "graph";
+
+const directoryViewMode = ref<DirectoryViewMode>("tables");
+const graphSelectedTag = ref<TaxonomyTag | null>(null);
 
 const {
   taxonomy,
@@ -344,6 +352,23 @@ function isGroupSelected(scopeKey: string, tagId: string) {
   return selectedScopeKey.value === scopeKey && selectedGroupId.value === tagId;
 }
 
+function onGraphSelectTag(tag: TaxonomyTag) {
+  graphSelectedTag.value = tag;
+  if (!isTaxonomyScopeTreeNode(tag) && isGroup(tag)) {
+    taxonomy.selectGroup(tag.scopeKey, tag.id);
+  }
+}
+
+function clearGraphSelection() {
+  graphSelectedTag.value = null;
+}
+
+watch(directoryViewMode, mode => {
+  if (mode === "tables") {
+    clearGraphSelection();
+  }
+});
+
 const hierarchyColumns: ColumnsType<TaxonomyTag> = [
   { title: "Название", dataIndex: "label", key: "label" },
   { title: "Ключ", dataIndex: "key", key: "key" },
@@ -368,9 +393,19 @@ const childColumns: ColumnsType<TaxonomyTag> = [
 
 <template>
   <Space direction="vertical" size="large" style="width: 100%">
-      <Space align="center" style="width: 100%; justify-content: space-between">
+      <Space align="center" style="width: 100%; justify-content: space-between" wrap>
         <Title :level="3" style="margin: 0">Справочник таксономии</Title>
-        <Button @click="scopeModalOpen = true">Добавить раздел</Button>
+        <Space wrap>
+          <Segmented
+            :value="directoryViewMode"
+            :options="[
+              { label: 'Таблицы', value: 'tables' },
+              { label: 'Data Graph', value: 'graph' },
+            ]"
+            @change="value => (directoryViewMode = value as DirectoryViewMode)"
+          />
+          <Button @click="scopeModalOpen = true">Добавить раздел</Button>
+        </Space>
       </Space>
 
       <Alert v-if="error" type="error" show-icon :message="error" />
@@ -384,10 +419,43 @@ const childColumns: ColumnsType<TaxonomyTag> = [
       />
 
       <Text type="secondary">
-        Каждый раздел — отдельная таблица корневых тегов и иерархии (данные taxonomyForest).
-        Разделы задаются кнопкой «Добавить раздел».
+        {{
+          directoryViewMode === "tables"
+            ? "Каждый раздел — отдельная таблица корневых тегов и иерархии (данные taxonomyForest). Разделы задаются кнопкой «Добавить раздел»."
+            : "Общее дерево: разделы таксономии и их иерархии на одном канвасе. Клик по узлу — карточка поверх графа."
+        }}
       </Text>
 
+      <Card
+        v-if="directoryViewMode === 'graph' && scopeSections.length > 0"
+        title="Общее дерево таксономии"
+      >
+        <TaxonomyGlobalGraphView
+          v-if="directoriesLoaded"
+          :sections="scopeSections"
+          :loading="loading"
+          :selected-tag="graphSelectedTag"
+          :is-group="isGroup"
+          :is-group-selected="isGroupSelected"
+          :is-deletable-as-group="isDeletableAsGroup"
+          :scope-label="scopeLabel"
+          @select="onGraphSelectTag"
+          @close="clearGraphSelection"
+          @add-root-tag="scopeKey => openCreateTag(scopeKey, null)"
+          @view-composition="(scopeKey, tagId) => taxonomy.selectGroup(scopeKey, tagId)"
+          @add-child="(scopeKey, parentId) => openCreateTag(scopeKey, parentId)"
+          @delete-group="(scopeKey, tag) => openDeleteGroupModal(scopeKey, tag)"
+          @delete-tag="deleteTag"
+        />
+        <Alert
+          v-else
+          type="info"
+          show-icon
+          message="Загрузка иерархии…"
+        />
+      </Card>
+
+      <template v-if="directoryViewMode === 'tables'">
       <Collapse
         v-if="scopeSections.length > 0"
         v-model:activeKey="hierarchyCollapseKeys"
@@ -399,7 +467,7 @@ const childColumns: ColumnsType<TaxonomyTag> = [
           :panel-key="section.scope.key"
         >
           <template #header>
-            <Space :size="8" @click.stop>
+            <Space :size="8" wrap @click.stop>
               <span>Иерархия раздела «{{ section.scope.label }}»</span>
               <Tag color="processing" style="margin: 0; font-family: monospace">
                 {{ scopeKeyDotPrefix(section.scope.key) }}
@@ -409,6 +477,7 @@ const childColumns: ColumnsType<TaxonomyTag> = [
           <Text type="secondary" style="display: block; margin-bottom: 12px">
             {{ hierarchyHint(section.scope.key) }}
           </Text>
+
           <Table
             v-if="directoriesLoaded"
             row-key="id"
@@ -536,6 +605,7 @@ const childColumns: ColumnsType<TaxonomyTag> = [
           </Table>
         </Card>
       </template>
+      </template>
 
       <Card
         v-if="selectedGroup"
@@ -634,10 +704,18 @@ const childColumns: ColumnsType<TaxonomyTag> = [
       >
         <Form layout="vertical">
           <Form.Item label="Ключ" required>
-            <Input v-model:value="scopeForm.key" placeholder="product" />
+            <Input
+              v-model:value="scopeForm.key"
+              placeholder="product"
+              @press-enter="onCreateScope"
+            />
           </Form.Item>
           <Form.Item label="Подпись" required>
-            <Input v-model:value="scopeForm.label" placeholder="Метки продуктов" />
+            <Input
+              v-model:value="scopeForm.label"
+              placeholder="Метки продуктов"
+              @press-enter="onCreateScope"
+            />
           </Form.Item>
           <Form.Item label="Описание">
             <Input.TextArea v-model:value="scopeForm.description" :rows="2" />
