@@ -1,5 +1,32 @@
+import type { TaxonomyScopeSectionView } from "@/stores/taxonomy/types";
 import type { TaxonomyTag } from "@/types/content";
 import { TAXONOMY_TAG_NAMESPACE_OPTIONS } from "@/types/content";
+
+/** Синтетический id узла раздела в общем Data Graph (не API-тег). */
+export const TAXONOMY_SCOPE_TREE_NODE_PREFIX = "taxonomy-scope:";
+
+export function taxonomyScopeTreeNodeId(scopeKey: string): string {
+  return `${TAXONOMY_SCOPE_TREE_NODE_PREFIX}${scopeKey}`;
+}
+
+export function isTaxonomyScopeTreeNode(tag: Pick<TaxonomyTag, "id">): boolean {
+  return tag.id.startsWith(TAXONOMY_SCOPE_TREE_NODE_PREFIX);
+}
+
+/** Корни общего дерева: один узел на раздел, под ним — иерархия раздела. */
+export function buildGlobalTaxonomyForestRoots(
+  sections: TaxonomyScopeSectionView[],
+): TaxonomyTag[] {
+  return sections.map(section => ({
+    id: taxonomyScopeTreeNodeId(section.scope.key),
+    scopeKey: section.scope.key,
+    key: section.scope.key,
+    namespace: "TOPIC",
+    label: section.scope.label,
+    sortOrder: section.scope.sortOrder,
+    children: section.hierarchyRoots,
+  }));
+}
 
 function isGuidesScope(scopeKey: string): boolean {
   return scopeKey === "guides" || scopeKey === "guide";
