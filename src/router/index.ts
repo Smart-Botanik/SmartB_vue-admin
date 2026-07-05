@@ -26,6 +26,16 @@ const router = createRouter({
           component: () => import("@/pages/taxonomy/TaxonomyDirectoryPage.vue"),
         },
         {
+          path: "content/site-pages/home",
+          name: "site-home-editor",
+          component: () => import("@/pages/content/HomePageEditorPage.vue"),
+        },
+        {
+          path: "community/telegram",
+          name: "telegram-hub",
+          component: () => import("@/pages/telegram/TelegramHubPage.vue"),
+        },
+        {
           path: "content/taxonomy",
           redirect: { name: "taxonomy-directory" },
         },

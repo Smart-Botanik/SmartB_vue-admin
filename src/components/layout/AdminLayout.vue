@@ -20,6 +20,8 @@ import {
   AppstoreOutlined,
   DeploymentUnitOutlined,
   TagsOutlined,
+  FileTextOutlined,
+  SendOutlined,
 } from "@ant-design/icons-vue";
 import {
   VUE_TO_REACT_MENU,
@@ -38,20 +40,34 @@ const collapsed = ref(true);
 
 const selectedKeys = computed(() => [route.path]);
 
-const openKeys = ref<string[]>(["section-meta", "section-roadmap", "section-react"]);
+const openKeys = ref<string[]>([
+  "section-content",
+  "section-community",
+  "section-meta",
+  "section-roadmap",
+  "section-react",
+]);
+
+function sectionIcon(key: string) {
+  if (key === "content") {
+    return h(FileTextOutlined);
+  }
+  if (key === "community") {
+    return h(SendOutlined);
+  }
+  if (key === "taxonomy") {
+    return h(TagsOutlined);
+  }
+  if (key === "meta") {
+    return h(DeploymentUnitOutlined);
+  }
+  return h(AppstoreOutlined);
+}
 
 const menuItems = computed(() => {
   const internalSections = VUE_MENU_SECTIONS.map((section) => ({
     key: `section-${section.key}`,
-    icon: () => {
-      if (section.key === "taxonomy") {
-        return h(TagsOutlined);
-      }
-      if (section.key === "meta") {
-        return h(DeploymentUnitOutlined);
-      }
-      return h(AppstoreOutlined);
-    },
+    icon: () => sectionIcon(section.key),
     label: section.title,
     children: section.items.map((item) => ({
       key: item.path,
