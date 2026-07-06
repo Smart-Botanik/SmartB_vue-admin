@@ -5,23 +5,27 @@
   "type": "module",
   "scripts": {
     "dev": "vite --mode development",
-    "build": "vue-tsc --noEmit && vite build --mode production",
+    "build": "vue-tsc -p tsconfig.app.json --noEmit && vite build --mode production",
     "preview": "vite preview",
-    "type-check": "vue-tsc --noEmit",
+    "type-check": "vue-tsc -p tsconfig.app.json --noEmit",
     "smoke:taxonomy": "node scripts/smoke-taxonomy.mjs"
   },
   "dependencies": {
     "@ant-design/icons-vue": "^7.0.1",
     "@growing/admin-shell": "file:../packages/admin-shell",
+    "@growing/content-markdown": "file:../packages/content-markdown",
+    "@growing/contracts": "file:../packages/contracts",
     "ant-design-vue": "^4.2.6",
     "axios": "^1.6.2",
     "d3": "^7.9.0",
+    "markdown-it": "^14.1.0",
     "pinia": "^2.3.0",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0"
   },
   "devDependencies": {
     "@types/d3": "^7.4.3",
+    "@types/markdown-it": "^14.1.2",
     "@vitejs/plugin-vue": "^5.2.1",
     "typescript": "^5.2.2",
     "vite": "^5.0.8",

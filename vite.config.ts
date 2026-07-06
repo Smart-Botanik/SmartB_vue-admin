@@ -21,6 +21,11 @@ export default defineConfig(({ mode }) => {
           __dirname,
           "../packages/admin-shell/src/index.ts",
         ),
+        "@growing/content-markdown": path.resolve(
+          __dirname,
+          "../packages/content-markdown/src/index.ts",
+        ),
+        "@growing/contracts": path.resolve(__dirname, "../packages/contracts/src/index.ts"),
       },
     },
     server: {
@@ -39,6 +44,11 @@ export default defineConfig(({ mode }) => {
           secure: false,
         },
         "/graphql": {
+          target: apiTarget,
+          changeOrigin: true,
+          secure: false,
+        },
+        "/media": {
           target: apiTarget,
           changeOrigin: true,
           secure: false,

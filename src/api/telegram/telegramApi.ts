@@ -2,6 +2,7 @@ import { graphqlClient } from "@/services/graphql/client";
 import type {
   CreateTelegramBotInput,
   CreateTelegramChannelInput,
+  CropGuideTelegramPublication,
   TelegramBot,
   TelegramChannel,
   UpdateTelegramBotInput,
@@ -30,6 +31,23 @@ const TELEGRAM_CHANNEL_FIELDS = `
   updatedAt
 `;
 
+const TELEGRAM_PUBLICATION_FIELDS = `
+  id
+  cropGuideId
+  channelId
+  botId
+  channelName
+  botName
+  telegramMessageId
+  telegramPostUrl
+  publishedAt
+  channel {
+    ${TELEGRAM_CHANNEL_FIELDS}
+    bot { ${TELEGRAM_BOT_FIELDS} }
+  }
+  bot { ${TELEGRAM_BOT_FIELDS} }
+`;
+
 export const telegramApi = {
   async listBots(): Promise<TelegramBot[]> {
     const data = await graphqlClient.request<{ telegramBots: TelegramBot[] }>({
@@ -44,18 +62,21 @@ export const telegramApi = {
     return data.telegramBots;
   },
 
-  async listChannels(botId?: string): Promise<TelegramChannel[]> {
+  async listChannels(botId?: string, isActive?: boolean): Promise<TelegramChannel[]> {
     const data = await graphqlClient.request<
       { telegramChannels: TelegramChannel[] },
-      { botId?: string }
+      { botId?: string; isActive?: boolean }
     >({
-      query: `query TelegramChannels($botId: ID) {
-        telegramChannels(botId: $botId) {
+      query: `query TelegramChannels($botId: ID, $isActive: Boolean) {
+        telegramChannels(botId: $botId, isActive: $isActive) {
           ${TELEGRAM_CHANNEL_FIELDS}
           bot { ${TELEGRAM_BOT_FIELDS} }
         }
       }`,
-      variables: botId ? { botId } : {},
+      variables: {
+        ...(botId ? { botId } : {}),
+        ...(isActive != null ? { isActive } : {}),
+      },
       operationName: "TelegramChannels",
     });
     return data.telegramChannels;
@@ -72,6 +93,25 @@ export const telegramApi = {
       operationName: "TelegramDefaultChannel",
     });
     return data.telegramDefaultChannel;
+  },
+
+  async listGuidePublications(
+    cropGuideId: string,
+    limit = 4,
+  ): Promise<CropGuideTelegramPublication[]> {
+    const data = await graphqlClient.request<
+      { cropGuideTelegramPublications: CropGuideTelegramPublication[] },
+      { cropGuideId: string; limit: number }
+    >({
+      query: `query CropGuideTelegramPublications($cropGuideId: ID!, $limit: Int) {
+        cropGuideTelegramPublications(cropGuideId: $cropGuideId, limit: $limit) {
+          ${TELEGRAM_PUBLICATION_FIELDS}
+        }
+      }`,
+      variables: { cropGuideId, limit },
+      operationName: "CropGuideTelegramPublications",
+    });
+    return data.cropGuideTelegramPublications;
   },
 
   async createBot(input: CreateTelegramBotInput): Promise<TelegramBot> {

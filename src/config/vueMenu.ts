@@ -17,6 +17,11 @@ export const VUE_MENU_SECTIONS: VueMenuSection[] = [
     title: "Контент",
     items: [
       {
+        key: "/content/guides",
+        label: "Руководства",
+        path: "/content/guides",
+      },
+      {
         key: "/content/site-pages/home",
         label: "Главная страница",
         path: "/content/site-pages/home",

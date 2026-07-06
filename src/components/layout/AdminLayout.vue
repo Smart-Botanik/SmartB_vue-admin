@@ -38,7 +38,12 @@ const router = useRouter();
 const auth = useAuthStore();
 const collapsed = ref(true);
 
-const selectedKeys = computed(() => [route.path]);
+const selectedKeys = computed(() => {
+  if (route.path.startsWith("/content/guides")) {
+    return ["/content/guides"];
+  }
+  return [route.path];
+});
 
 const openKeys = ref<string[]>([
   "section-content",

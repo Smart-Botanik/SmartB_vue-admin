@@ -51,3 +51,17 @@ export type UpdateTelegramChannelInput = {
   isActive?: boolean | null;
   publicUrl?: string | null;
 };
+
+export type CropGuideTelegramPublication = {
+  id: string;
+  cropGuideId: string;
+  channelId?: string | null;
+  botId?: string | null;
+  channelName?: string | null;
+  botName?: string | null;
+  telegramMessageId: string;
+  telegramPostUrl?: string | null;
+  publishedAt: string;
+  channel?: TelegramChannel | null;
+  bot?: TelegramBot | null;
+};

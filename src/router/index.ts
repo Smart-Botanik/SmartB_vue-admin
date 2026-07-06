@@ -31,6 +31,21 @@ const router = createRouter({
           component: () => import("@/pages/content/HomePageEditorPage.vue"),
         },
         {
+          path: "content/guides/create",
+          name: "guide-create",
+          component: () => import("@/pages/content/GuideCreatePage.vue"),
+        },
+        {
+          path: "content/guides/edit/:id",
+          name: "guide-edit",
+          component: () => import("@/pages/content/GuideEditPage.vue"),
+        },
+        {
+          path: "content/guides",
+          name: "guides-list",
+          component: () => import("@/pages/content/GuidesPage.vue"),
+        },
+        {
           path: "community/telegram",
           name: "telegram-hub",
           component: () => import("@/pages/telegram/TelegramHubPage.vue"),
