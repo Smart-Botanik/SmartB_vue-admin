@@ -1,3 +1,10 @@
+export type TelegramBotTokenValidation = {
+  telegramBotId: string;
+  username?: string | null;
+  firstName: string;
+  isBot: boolean;
+};
+
 export type TelegramBot = {
   id: string;
   name: string;

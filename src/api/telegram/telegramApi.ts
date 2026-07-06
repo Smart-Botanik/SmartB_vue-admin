@@ -4,6 +4,7 @@ import type {
   CreateTelegramChannelInput,
   CropGuideTelegramPublication,
   TelegramBot,
+  TelegramBotTokenValidation,
   TelegramChannel,
   UpdateTelegramBotInput,
   UpdateTelegramChannelInput,
@@ -112,6 +113,25 @@ export const telegramApi = {
       operationName: "CropGuideTelegramPublications",
     });
     return data.cropGuideTelegramPublications;
+  },
+
+  async validateBotToken(token: string): Promise<TelegramBotTokenValidation> {
+    const data = await graphqlClient.request<
+      { validateTelegramBotToken: TelegramBotTokenValidation },
+      { token: string }
+    >({
+      query: `mutation ValidateTelegramBotToken($token: String!) {
+        validateTelegramBotToken(token: $token) {
+          telegramBotId
+          username
+          firstName
+          isBot
+        }
+      }`,
+      variables: { token },
+      operationName: "ValidateTelegramBotToken",
+    });
+    return data.validateTelegramBotToken;
   },
 
   async createBot(input: CreateTelegramBotInput): Promise<TelegramBot> {

@@ -39,6 +39,11 @@ const botForm = reactive({
   isActive: true,
 });
 const botSubmitting = ref(false);
+const botValidating = ref(false);
+const botTokenValidation = ref<{
+  username?: string | null;
+  firstName: string;
+} | null>(null);
 
 const channelModalOpen = ref(false);
 const channelModalMode = ref<"create" | "edit">("create");
@@ -169,6 +174,7 @@ function resetBotForm() {
   botForm.token = "";
   botForm.isActive = true;
   editingBotId.value = null;
+  botTokenValidation.value = null;
 }
 
 function openCreateBot() {
@@ -184,6 +190,31 @@ function openEditBot(bot: TelegramBot) {
   botForm.token = "";
   botForm.isActive = bot.isActive;
   botModalOpen.value = true;
+}
+
+async function validateBotToken() {
+  if (!botForm.token.trim()) {
+    message.error("Введите токен для проверки");
+    return;
+  }
+
+  botValidating.value = true;
+  botTokenValidation.value = null;
+  try {
+    const result = await telegramApi.validateBotToken(botForm.token.trim());
+    botTokenValidation.value = {
+      username: result.username,
+      firstName: result.firstName,
+    };
+    if (!botForm.name.trim()) {
+      botForm.name = result.username ? `@${result.username}` : result.firstName;
+    }
+    message.success("Токен валиден");
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "Токен не прошёл проверку");
+  } finally {
+    botValidating.value = false;
+  }
 }
 
 async function submitBot() {
@@ -355,7 +386,7 @@ onMounted(() => {
           type="info"
           show-icon
           message="Планировщик публикаций"
-          description="Очередь постов появится после BK-TG-QUEUE-1 (Phase 2 TG-INT-1). Публикация гайдов из React admin пока через кнопку «Отправить в Telegram»."
+          description="Очередь постов появится после BK-TG-QUEUE-1 (Phase 2 TG-INT-1). Публикация гайдов — кнопка «Отправить в Telegram» в Vue admin."
         />
       </Tabs.TabPane>
     </Tabs>
@@ -374,8 +405,30 @@ onMounted(() => {
           :label="botModalMode === 'create' ? 'Токен' : 'Новый токен (оставьте пустым, чтобы не менять)'"
           :required="botModalMode === 'create'"
         >
-          <Input.Password v-model:value="botForm.token" autocomplete="off" />
+          <Space.Compact style="width: 100%">
+            <Input.Password
+              v-model:value="botForm.token"
+              autocomplete="off"
+              style="flex: 1"
+            />
+            <Button
+              :loading="botValidating"
+              :disabled="!botForm.token.trim()"
+              @click="validateBotToken"
+            >
+              Проверить
+            </Button>
+          </Space.Compact>
         </Form.Item>
+        <Alert
+          v-if="botTokenValidation"
+          type="success"
+          show-icon
+          :message="`Токен валиден: ${botTokenValidation.firstName}${
+            botTokenValidation.username ? ` (@${botTokenValidation.username})` : ''
+          }`"
+          style="margin-bottom: 16px"
+        />
         <Form.Item label="Активен">
           <Switch v-model:checked="botForm.isActive" />
         </Form.Item>
