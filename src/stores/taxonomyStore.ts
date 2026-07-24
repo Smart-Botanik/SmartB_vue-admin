@@ -2,7 +2,12 @@ import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 
 import { taxonomyApi } from "@/api/taxonomy/taxonomyApi";
-import type { CreateTaxonomyScopeInput, CreateTaxonomyTagInput } from "@/api/taxonomy/taxonomyApi";
+import type {
+  CreateTaxonomyScopeInput,
+  CreateTaxonomyTagInput,
+  EditTaxonomyTagLabelInput,
+  UpdateTaxonomyTagInput,
+} from "@/api/taxonomy/taxonomyApi";
 import {
   cloneJson,
   findTagScopeKey,
@@ -99,11 +104,12 @@ export const useTaxonomyStore = defineStore("taxonomy", () => {
 
     try {
       for (const key of scopeKeys) {
+        // Ungrouped = forest roots that fail isIntentionalRoot.
+        // Avoid taxonomyTags(parentId: null): Nest BFF maps null→undefined and returns children too.
         const forest = hydrateForestChildren(
           snapshotTaxonomyForest(cloneJson(await taxonomyApi.fetchForest(key))),
         );
-        const rootItems = await taxonomyApi.listRootTags(key);
-        const ungroupedTags = rootItems.filter(tag => !isIntentionalRoot(tag, key));
+        const ungroupedTags = forest.filter(tag => !isIntentionalRoot(tag, key));
 
         scopeDirectories.value[key] = {
           forestTree: cloneJson(forest),
@@ -138,13 +144,15 @@ export const useTaxonomyStore = defineStore("taxonomy", () => {
     await fetchDirectory(input.scopeKey);
   }
 
-  async function updateTaxonomyTag(
-    id: string,
-    input: Parameters<typeof taxonomyApi.updateTag>[1],
-  ) {
+  async function updateTaxonomyTag(id: string, input: UpdateTaxonomyTagInput) {
     const scopeKey = findTagScopeKey(scopeDirectories.value, id);
     await taxonomyApi.updateTag(id, input);
     await fetchDirectory(scopeKey);
+  }
+
+  /** Правка тега: только label. Раздел (scope) не обновляем — только createScope. */
+  async function updateTaxonomyTagLabel(id: string, input: EditTaxonomyTagLabelInput) {
+    await updateTaxonomyTag(id, { label: input.label });
   }
 
   async function deleteTaxonomyTag(id: string) {
@@ -191,6 +199,7 @@ export const useTaxonomyStore = defineStore("taxonomy", () => {
     createTaxonomyScope,
     createTaxonomyTag,
     updateTaxonomyTag,
+    updateTaxonomyTagLabel,
     deleteTaxonomyTag,
     deleteTaxonomyGroup,
     directoryForScope,

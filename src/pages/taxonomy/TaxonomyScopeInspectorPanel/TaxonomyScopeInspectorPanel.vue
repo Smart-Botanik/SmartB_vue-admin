@@ -38,6 +38,9 @@ const emit = defineEmits<{
       <Text type="secondary" style="font-size: 12px">
         Корневых тегов в иерархии: {{ rootCount }}
       </Text>
+      <Text type="secondary" style="font-size: 12px">
+        Раздел нельзя править — только добавить новый.
+      </Text>
       <Button type="primary" size="small" block @click="emit('addRootTag')">
         + Добавить корневой тег
       </Button>

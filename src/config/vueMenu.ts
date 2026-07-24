@@ -26,6 +26,21 @@ export const VUE_MENU_SECTIONS: VueMenuSection[] = [
         label: "Главная страница",
         path: "/content/site-pages/home",
       },
+      {
+        key: "/content/site-pages/calendar",
+        label: "Календарь",
+        path: "/content/site-pages/calendar",
+      },
+      {
+        key: "/content/facets/culture",
+        label: "Фасеты культур",
+        path: "/content/facets/culture",
+      },
+      {
+        key: "/content/useful",
+        label: "Полезное (лента)",
+        path: "/content/useful",
+      },
     ],
   },
   {
@@ -70,6 +85,14 @@ export const VUE_MENU_SECTIONS: VueMenuSection[] = [
     ],
   },
   {
+    key: "media",
+    title: "Media",
+    items: [
+      { key: "/media", label: "Файлы", path: "/media" },
+      { key: "/media/galleries", label: "Галереи", path: "/media/galleries" },
+    ],
+  },
+  {
     key: "roadmap",
     title: "Перенос (roadmap)",
     items: [
@@ -83,7 +106,6 @@ export const VUE_MENU_SECTIONS: VueMenuSection[] = [
         label: "Registry Tags",
         path: "/roadmap/registry-tags",
       },
-      { key: "/roadmap/media", label: "Media", path: "/roadmap/media" },
     ],
   },
 ];

@@ -110,6 +110,23 @@ export function createTagModalTitle(_scopeKey: string, parentId: string | null):
   return parentId ? "Новый подтег" : "Новый корневой тег";
 }
 
+export function editTagModalTitle(tag: Pick<TaxonomyTag, "label">): string {
+  return `Изменить подпись «${tag.label}»`;
+}
+
+/** Правка тега в справочнике — только подпись; ключ/тип/раздел не меняем. */
+export function getEditTagLabelValidationError(label: string): string | null {
+  if (!label.trim()) {
+    return "Укажите подпись";
+  }
+  return null;
+}
+
+/** Payload для updateTaxonomyTag: только label (не смешивать с parentId / key). */
+export function buildEditTagLabelInput(label: string): { label: string } {
+  return { label: label.trim() };
+}
+
 export function rootCreateButtonLabel(_scopeKey: string): string {
   return "+ Добавить тег";
 }

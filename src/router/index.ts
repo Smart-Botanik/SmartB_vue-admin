@@ -31,6 +31,21 @@ const router = createRouter({
           component: () => import("@/pages/content/HomePageEditorPage.vue"),
         },
         {
+          path: "content/site-pages/calendar",
+          name: "site-calendar-editor",
+          component: () => import("@/pages/content/CalendarPageEditorPage.vue"),
+        },
+        {
+          path: "content/facets/culture",
+          name: "culture-facet-editor",
+          component: () => import("@/pages/content/CultureFacetEditorPage.vue"),
+        },
+        {
+          path: "content/useful",
+          name: "useful-feed",
+          component: () => import("@/pages/content/UsefulFeedPage.vue"),
+        },
+        {
           path: "content/guides/create",
           name: "guide-create",
           component: () => import("@/pages/content/GuideCreatePage.vue"),
@@ -84,6 +99,26 @@ const router = createRouter({
           component: () => import("@/pages/meta/MetaEventTemplatesPage.vue"),
         },
         {
+          path: "media",
+          name: "media-library",
+          component: () => import("@/pages/media/MediaLibraryPage.vue"),
+        },
+        {
+          path: "media/galleries",
+          name: "media-galleries",
+          component: () => import("@/pages/media/GalleriesPage.vue"),
+        },
+        {
+          path: "media/galleries/create",
+          name: "gallery-create",
+          component: () => import("@/pages/media/GalleryEditorPage.vue"),
+        },
+        {
+          path: "media/galleries/edit/:id",
+          name: "gallery-edit",
+          component: () => import("@/pages/media/GalleryEditorPage.vue"),
+        },
+        {
           path: "roadmap/field-patterns",
           name: "roadmap-field-patterns",
           component: () => import("@/pages/roadmap/RoadmapPlaceholderPage.vue"),
@@ -94,12 +129,6 @@ const router = createRouter({
           name: "roadmap-registry-tags",
           component: () => import("@/pages/roadmap/RoadmapPlaceholderPage.vue"),
           props: { title: "Registry Tags", phase: "Phase 2" },
-        },
-        {
-          path: "roadmap/media",
-          name: "roadmap-media",
-          component: () => import("@/pages/roadmap/RoadmapPlaceholderPage.vue"),
-          props: { title: "Media", phase: "Phase 2" },
         },
       ],
     },

@@ -30,6 +30,7 @@ import { DELETE_STRATEGY_LABELS, taxonomyTagNamespaceLabel } from "@/types/conte
 import {
   childCreateButtonLabel,
   createTagModalTitle,
+  editTagModalTitle,
   groupParentOptions,
   defaultNamespaceForCreate,
   flattenForest,
@@ -40,6 +41,8 @@ import {
   showVariantAxisField,
   formatCreateTaxonomyTagError,
   getCreateTagKeyValidationError,
+  getEditTagLabelValidationError,
+  buildEditTagLabelInput,
   initialCreateTagKeyInput,
   createTagNamespaceDisplayLabel,
   resolveCreateTagApiParentId,
@@ -69,6 +72,7 @@ const {
 } = useTaxonomyDirectoryBootstrap();
 
 const tagModalOpen = ref(false);
+const editModalOpen = ref(false);
 const assignModalOpen = ref(false);
 const scopeModalOpen = ref(false);
 const deleteModalOpen = ref(false);
@@ -78,6 +82,9 @@ const deleteStrategy = ref<TaxonomyGroupDeleteStrategy>("PROMOTE_TO_ROOT");
 const deleteNewParentId = ref<string | undefined>();
 const assignTag = ref<TaxonomyTag | null>(null);
 const assignParentId = ref<string | undefined>();
+const editTag = ref<TaxonomyTag | null>(null);
+const editLabel = ref("");
+const editLabelError = ref<string | undefined>();
 
 /** Ключи разделов, у которых раскрыта таблица корневой иерархии (групп). */
 const hierarchyCollapseKeys = ref<string[]>([]);
@@ -141,6 +148,10 @@ function parentOptionsForScope(scopeKey: string) {
 
 const tagModalTitle = computed(() =>
   createTagModalTitle(actionScopeKey.value, createParentId.value),
+);
+
+const editModalTitle = computed(() =>
+  editTag.value ? editTagModalTitle(editTag.value) : "Изменить подпись",
 );
 
 const createTagKeyPrefix = computed(() => {
@@ -268,8 +279,53 @@ async function onCreateScope() {
     });
     message.success("Раздел создан");
     scopeModalOpen.value = false;
+    scopeForm.key = "";
+    scopeForm.label = "";
+    scopeForm.description = "";
   } catch (error) {
     message.error(error instanceof Error ? error.message : "Ошибка");
+  }
+}
+
+function openEditTag(tag: TaxonomyTag) {
+  if (isTaxonomyScopeTreeNode(tag)) {
+    message.info("Раздел нельзя править — добавьте новый через «Добавить раздел»");
+    return;
+  }
+  editTag.value = tag;
+  editLabel.value = tag.label;
+  editLabelError.value = undefined;
+  editModalOpen.value = true;
+}
+
+function closeEditTagModal() {
+  editModalOpen.value = false;
+  editTag.value = null;
+  editLabel.value = "";
+  editLabelError.value = undefined;
+}
+
+async function onEditTagLabel() {
+  const tag = editTag.value;
+  if (!tag) {
+    return;
+  }
+  const labelError = getEditTagLabelValidationError(editLabel.value);
+  if (labelError) {
+    editLabelError.value = labelError;
+    return;
+  }
+  editLabelError.value = undefined;
+  const nextLabel = buildEditTagLabelInput(editLabel.value).label;
+  try {
+    await taxonomy.updateTaxonomyTagLabel(tag.id, { label: nextLabel });
+    if (graphSelectedTag.value?.id === tag.id) {
+      graphSelectedTag.value = { ...graphSelectedTag.value, label: nextLabel };
+    }
+    message.success("Подпись обновлена");
+    closeEditTagModal();
+  } catch (error) {
+    editLabelError.value = error instanceof Error ? error.message : "Ошибка сохранения";
   }
 }
 
@@ -373,21 +429,21 @@ const hierarchyColumns: ColumnsType<TaxonomyTag> = [
   { title: "Название", dataIndex: "label", key: "label" },
   { title: "Ключ", dataIndex: "key", key: "key" },
   { title: "Тип", dataIndex: "namespace", key: "namespace", width: 140 },
-  { title: "Действия", key: "actions", width: 300 },
+  { title: "Действия", key: "actions", width: 360 },
 ];
 
 const ungroupedColumns: ColumnsType<TaxonomyTag> = [
   { title: "Подпись", dataIndex: "label", key: "label" },
   { title: "Ключ", dataIndex: "key", key: "key" },
   { title: "Тип", dataIndex: "namespace", key: "namespace" },
-  { title: "", key: "actions", width: 240 },
+  { title: "", key: "actions", width: 300 },
 ];
 
 const childColumns: ColumnsType<TaxonomyTag> = [
   { title: "Подпись", dataIndex: "label", key: "label" },
   { title: "Ключ", dataIndex: "key", key: "key" },
   { title: "Тип", dataIndex: "namespace", key: "namespace", width: 140 },
-  { title: "", key: "actions", width: 120 },
+  { title: "", key: "actions", width: 180 },
 ];
 </script>
 
@@ -421,8 +477,8 @@ const childColumns: ColumnsType<TaxonomyTag> = [
       <Text type="secondary">
         {{
           directoryViewMode === "tables"
-            ? "Каждый раздел — отдельная таблица корневых тегов и иерархии (данные taxonomyForest). Разделы задаются кнопкой «Добавить раздел»."
-            : "Общее дерево: разделы таксономии и их иерархии на одном канвасе. Клик по узлу — карточка поверх графа."
+            ? "Каждый раздел — отдельная таблица корневых тегов и иерархии (данные taxonomyForest). Разделы только создаются («Добавить раздел»), не правятся. У тегов можно изменить подпись."
+            : "Общее дерево: разделы таксономии и их иерархии на одном канвасе. Клик по узлу — карточка поверх графа. Раздел не редактируется — только добавление нового."
         }}
       </Text>
 
@@ -444,6 +500,7 @@ const childColumns: ColumnsType<TaxonomyTag> = [
           @add-root-tag="scopeKey => openCreateTag(scopeKey, null)"
           @view-composition="(scopeKey, tagId) => taxonomy.selectGroup(scopeKey, tagId)"
           @add-child="(scopeKey, parentId) => openCreateTag(scopeKey, parentId)"
+          @edit-tag="openEditTag"
           @delete-group="(scopeKey, tag) => openDeleteGroupModal(scopeKey, tag)"
           @delete-tag="deleteTag"
         />
@@ -511,6 +568,12 @@ const childColumns: ColumnsType<TaxonomyTag> = [
                 </template>
                 <template v-else-if="column.key === 'actions'">
                   <Space size="small">
+                    <Button
+                      size="small"
+                      @click="openEditTag(row as TaxonomyTag)"
+                    >
+                      Изменить
+                    </Button>
                     <Button
                       v-if="isGroup(row as TaxonomyTag)"
                       size="small"
@@ -584,6 +647,9 @@ const childColumns: ColumnsType<TaxonomyTag> = [
               </template>
               <template v-else-if="column.key === 'actions'">
                 <Space size="small">
+                  <Button size="small" @click="openEditTag(row as TaxonomyTag)">
+                    Изменить
+                  </Button>
                   <Button
                     size="small"
                     type="primary"
@@ -636,18 +702,55 @@ const childColumns: ColumnsType<TaxonomyTag> = [
               <Tag>{{ taxonomyTagNamespaceLabel((row as TaxonomyTag).namespace) }}</Tag>
             </template>
             <template v-else-if="column.key === 'actions'">
-              <Popconfirm
-                title="Удалить этот тег?"
-                ok-text="Удалить"
-                cancel-text="Отмена"
-                @confirm="deleteTag((row as TaxonomyTag).id)"
-              >
-                <Button size="small" danger>Удалить</Button>
-              </Popconfirm>
+              <Space size="small">
+                <Button size="small" @click="openEditTag(row as TaxonomyTag)">
+                  Изменить
+                </Button>
+                <Popconfirm
+                  title="Удалить этот тег?"
+                  ok-text="Удалить"
+                  cancel-text="Отмена"
+                  @confirm="deleteTag((row as TaxonomyTag).id)"
+                >
+                  <Button size="small" danger>Удалить</Button>
+                </Popconfirm>
+              </Space>
             </template>
           </template>
         </Table>
       </Card>
+
+      <Modal
+        :title="editModalTitle"
+        :open="editModalOpen"
+        ok-text="Сохранить"
+        @cancel="closeEditTagModal"
+        @ok="onEditTagLabel"
+      >
+        <Form layout="vertical" @finish="onEditTagLabel">
+          <Form.Item label="Ключ">
+            <Text code>{{ editTag?.key }}</Text>
+          </Form.Item>
+          <Form.Item label="Тип">
+            <Tag v-if="editTag">
+              {{ taxonomyTagNamespaceLabel(editTag.namespace) }}
+            </Tag>
+          </Form.Item>
+          <Form.Item
+            label="Подпись"
+            required
+            :validate-status="editLabelError ? 'error' : undefined"
+            :help="editLabelError || 'Меняется только подпись. Ключ и раздел не правятся.'"
+          >
+            <Input
+              v-model:value="editLabel"
+              placeholder="Подпись тега"
+              @update:value="editLabelError = undefined"
+              @press-enter="onEditTagLabel"
+            />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <Modal
         :title="tagModalTitle"
@@ -702,6 +805,9 @@ const childColumns: ColumnsType<TaxonomyTag> = [
         @cancel="scopeModalOpen = false"
         @ok="onCreateScope"
       >
+        <Text type="secondary" style="display: block; margin-bottom: 12px">
+          Разделы только добавляются. Существующий раздел не обновляется — создайте новый.
+        </Text>
         <Form layout="vertical">
           <Form.Item label="Ключ" required>
             <Input

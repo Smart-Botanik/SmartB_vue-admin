@@ -18,6 +18,7 @@ const emit = defineEmits<{
   close: [];
   viewComposition: [];
   addChild: [];
+  editTag: [];
   deleteGroup: [];
   deleteTag: [];
 }>();
@@ -47,6 +48,7 @@ const emit = defineEmits<{
         <Tag>{{ taxonomyTagNamespaceLabel(tag.namespace) }}</Tag>
       </div>
       <Space wrap :size="8">
+        <Button size="small" @click="emit('editTag')">Изменить</Button>
         <Button
           v-if="isGroup"
           size="small"

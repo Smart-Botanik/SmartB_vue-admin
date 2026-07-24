@@ -27,6 +27,7 @@ const emit = defineEmits<{
   addRootTag: [scopeKey: string];
   viewComposition: [scopeKey: string, tagId: string];
   addChild: [scopeKey: string, parentId: string];
+  editTag: [tag: TaxonomyTag];
   deleteGroup: [scopeKey: string, tag: TaxonomyTag];
   deleteTag: [tagId: string];
 }>();
@@ -77,6 +78,7 @@ const selectedScopeRootCount = computed(
         @close="emit('close')"
         @view-composition="emit('viewComposition', selectedTag.scopeKey, selectedTag.id)"
         @add-child="emit('addChild', selectedTag.scopeKey, selectedTag.id)"
+        @edit-tag="emit('editTag', selectedTag)"
         @delete-group="emit('deleteGroup', selectedTag.scopeKey, selectedTag)"
         @delete-tag="emit('deleteTag', selectedTag.id)"
       />

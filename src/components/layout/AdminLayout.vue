@@ -69,6 +69,29 @@ function sectionIcon(key: string) {
   return h(AppstoreOutlined);
 }
 
+function internalHref(path: string) {
+  return router.resolve(path).href;
+}
+
+function onInternalLinkClick(event: MouseEvent, path: string) {
+  // Let the browser handle new-tab intents natively:
+  // middle click (button 1), Ctrl/Cmd/Shift/Alt click.
+  if (
+    event.button !== 0 ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.shiftKey ||
+    event.altKey
+  ) {
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  if (path !== route.path) {
+    router.push(path);
+  }
+}
+
 const menuItems = computed(() => {
   const internalSections = VUE_MENU_SECTIONS.map((section) => ({
     key: `section-${section.key}`,
@@ -76,7 +99,19 @@ const menuItems = computed(() => {
     label: section.title,
     children: section.items.map((item) => ({
       key: item.path,
-      label: item.label,
+      label: h(
+        "a",
+        {
+          href: internalHref(item.path),
+          class: "admin-vue-menu-link",
+          onClick: (event: MouseEvent) => onInternalLinkClick(event, item.path),
+          onAuxclick: (event: MouseEvent) => {
+            // Prevent Ant Menu from selecting on middle click; browser opens the tab.
+            event.stopPropagation();
+          },
+        },
+        item.label,
+      ),
     })),
   }));
 
@@ -86,23 +121,34 @@ const menuItems = computed(() => {
     label: VUE_TO_REACT_MENU.title,
     children: VUE_TO_REACT_MENU.links.map((link) => ({
       key: `ext-${link.key}`,
-      label: () =>
-        h(
-          "a",
-          {
-            href: crossAppLinkHref(link),
-            target: "_blank",
-            rel: "noopener noreferrer",
-          },
-          link.label,
-        ),
+      label: h(
+        "a",
+        {
+          href: crossAppLinkHref(link),
+          class: "admin-vue-menu-link",
+          target: "_blank",
+          rel: "noopener noreferrer",
+        },
+        link.label,
+      ),
     })),
   };
 
   return [
     {
       key: "/",
-      label: "Dashboard",
+      label: h(
+        "a",
+        {
+          href: internalHref("/"),
+          class: "admin-vue-menu-link",
+          onClick: (event: MouseEvent) => onInternalLinkClick(event, "/"),
+          onAuxclick: (event: MouseEvent) => {
+            event.stopPropagation();
+          },
+        },
+        "Dashboard",
+      ),
     },
     ...internalSections,
     reactSection,
@@ -167,7 +213,7 @@ const displayName = computed(() => {
             :icon="collapsed ? h(MenuUnfoldOutlined) : h(MenuFoldOutlined)"
             @click="collapsed = !collapsed"
           />
-          <Typography.Title :level="4" style="margin: 0">
+          <Typography.Title :level="4" class="admin-vue-header-title">
             {{ envConfig.appName }}
           </Typography.Title>
         </Space>

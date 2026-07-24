@@ -41,6 +41,7 @@ export type CreateTaxonomyTagInput = {
   status?: TaxonomyTagStatus | null;
 };
 
+/** Полный input API; UI правки тега шлёт только `label`, назначение родителя — только `parentId`. */
 export type UpdateTaxonomyTagInput = {
   key?: string | null;
   namespace?: TaxonomyTagNamespace | null;
@@ -50,6 +51,11 @@ export type UpdateTaxonomyTagInput = {
   cropKind?: string | null;
   variantAxis?: string | null;
   status?: TaxonomyTagStatus | null;
+};
+
+/** Правка существующего тега в справочнике: только подпись. */
+export type EditTaxonomyTagLabelInput = {
+  label: string;
 };
 
 export const taxonomyApi = {
@@ -87,28 +93,6 @@ export const taxonomyApi = {
       operationName: "TaxonomyForest",
     });
     return data.taxonomyForest;
-  },
-
-  async listRootTags(scopeKey: string): Promise<TaxonomyTag[]> {
-    const data = await graphqlClient.request<
-      { taxonomyTags: { total: number; items: TaxonomyTag[] } },
-      { scopeKey: string; parentId: null; limit: number; offset: number }
-    >({
-      query: `query TaxonomyTags($scopeKey: String, $parentId: ID, $limit: Int, $offset: Int) {
-        taxonomyTags(
-          scopeKey: $scopeKey
-          parentId: $parentId
-          limit: $limit
-          offset: $offset
-        ) {
-          total
-          items { ${TAXONOMY_TAG_FIELDS} }
-        }
-      }`,
-      variables: { scopeKey, parentId: null, limit: 500, offset: 0 },
-      operationName: "TaxonomyTags",
-    });
-    return data.taxonomyTags.items;
   },
 
   async createTag(input: CreateTaxonomyTagInput): Promise<TaxonomyTag> {
