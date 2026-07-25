@@ -36,6 +36,16 @@ const router = createRouter({
           component: () => import("@/pages/content/CalendarPageEditorPage.vue"),
         },
         {
+          path: "content/calendar-days",
+          name: "calendar-days-list",
+          component: () => import("@/pages/content/CalendarDaysPage.vue"),
+        },
+        {
+          path: "content/calendar-days/:date",
+          name: "calendar-day-editor",
+          component: () => import("@/pages/content/CalendarDayEditorPage.vue"),
+        },
+        {
           path: "content/facets/culture",
           name: "culture-facet-editor",
           component: () => import("@/pages/content/CultureFacetEditorPage.vue"),

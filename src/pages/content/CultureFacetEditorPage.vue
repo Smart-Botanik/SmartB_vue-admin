@@ -26,6 +26,9 @@ import {
 } from "@/api/content/contentFacetApi";
 import { mediaApi, type MediaUploadResponse } from "@/api/media/mediaApi";
 import { taxonomyApi } from "@/api/taxonomy/taxonomyApi";
+import AiCultureFacetPanel, {
+  type CultureFacetAiTexts,
+} from "@/components/content/AiCultureFacetPanel.vue";
 import IconSearchModal from "@/components/content/IconSearchModal.vue";
 import type { TaxonomyTag } from "@/types/content";
 
@@ -115,6 +118,15 @@ function openIconSearch() {
 
 function onIconApplied(media: MediaUploadResponse) {
   logo.value = media;
+}
+
+function onAiTextsApply(texts: CultureFacetAiTexts) {
+  formModel.hubLead = texts.hubLead;
+  formModel.aboutShort = texts.aboutShort;
+  formModel.seoDescription = texts.seoDescription;
+  if (texts.hubTitle && !formModel.hubTitle.trim()) {
+    formModel.hubTitle = texts.hubTitle;
+  }
 }
 
 function clearLogo() {
@@ -539,48 +551,68 @@ onMounted(() => {
           />
         </Form.Item>
 
-        <Card size="small" title="Тексты" :loading="loadingProfile" style="margin-bottom: 16px">
-          <Form.Item label="Chip icon (emoji)" name="chipIcon">
-            <Input
-              v-model:value="formModel.chipIcon"
-              :maxlength="16"
-              placeholder="🍅 (необязательно)"
-              allow-clear
-            />
-          </Form.Item>
-          <Form.Item label="Hub title" name="hubTitle">
-            <Input
-              v-model:value="formModel.hubTitle"
-              :maxlength="120"
-              placeholder="Заголовок hub (например: Томаты)"
-              allow-clear
-            />
-          </Form.Item>
-          <Form.Item label="Hub lead" name="hubLead">
-            <Input.TextArea
-              v-model:value="formModel.hubLead"
-              :rows="3"
-              :maxlength="500"
-              placeholder="Короткий лид для hub культуры"
-            />
-          </Form.Item>
-          <Form.Item label="About short" name="aboutShort">
-            <Input.TextArea
-              v-model:value="formModel.aboutShort"
-              :rows="4"
-              :maxlength="1200"
-              placeholder="Краткое описание культуры на hub"
-            />
-          </Form.Item>
-          <Form.Item label="SEO description" name="seoDescription">
-            <Input.TextArea
-              v-model:value="formModel.seoDescription"
-              :rows="2"
-              :maxlength="320"
-              placeholder="Meta description для страницы культуры"
-            />
-          </Form.Item>
-        </Card>
+        <div class="culture-editor-texts">
+          <Card
+            size="small"
+            title="Тексты"
+            :loading="loadingProfile"
+            class="culture-editor-texts__form"
+          >
+            <Form.Item label="Chip icon (emoji)" name="chipIcon">
+              <Input
+                v-model:value="formModel.chipIcon"
+                :maxlength="16"
+                placeholder="🍅 (необязательно)"
+                allow-clear
+              />
+            </Form.Item>
+            <Form.Item label="Hub title" name="hubTitle">
+              <Input
+                v-model:value="formModel.hubTitle"
+                :maxlength="120"
+                placeholder="Заголовок hub (например: Томаты)"
+                allow-clear
+              />
+            </Form.Item>
+            <Form.Item label="Hub lead" name="hubLead">
+              <Input.TextArea
+                v-model:value="formModel.hubLead"
+                :rows="3"
+                :maxlength="500"
+                placeholder="Короткий лид для hub культуры"
+              />
+            </Form.Item>
+            <Form.Item label="About short" name="aboutShort">
+              <Input.TextArea
+                v-model:value="formModel.aboutShort"
+                :rows="4"
+                :maxlength="1200"
+                placeholder="Краткое описание культуры на hub"
+              />
+            </Form.Item>
+            <Form.Item label="SEO description" name="seoDescription">
+              <Input.TextArea
+                v-model:value="formModel.seoDescription"
+                :rows="2"
+                :maxlength="320"
+                placeholder="Meta description для страницы культуры"
+              />
+            </Form.Item>
+          </Card>
+
+          <AiCultureFacetPanel
+            class="culture-editor-texts__ai"
+            :subject-key="selectedKey"
+            :display-name="selectedCrop?.label"
+            :current="{
+              hubTitle: formModel.hubTitle,
+              hubLead: formModel.hubLead,
+              aboutShort: formModel.aboutShort,
+              seoDescription: formModel.seoDescription,
+            }"
+            @apply="onAiTextsApply"
+          />
+        </div>
 
         <Card size="small" title="Медиа" :loading="loadingProfile" style="margin-bottom: 16px">
           <Form.Item label="LOGO (PNG chip icon)">
@@ -675,3 +707,24 @@ onMounted(() => {
     />
   </Space>
 </template>
+
+<style scoped>
+.culture-editor-texts {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.9fr);
+  gap: 16px;
+  margin-bottom: 16px;
+  align-items: start;
+}
+
+.culture-editor-texts__form,
+.culture-editor-texts__ai {
+  min-width: 0;
+}
+
+@media (max-width: 960px) {
+  .culture-editor-texts {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

@@ -32,6 +32,11 @@ export const VUE_MENU_SECTIONS: VueMenuSection[] = [
         path: "/content/site-pages/calendar",
       },
       {
+        key: "/content/calendar-days",
+        label: "Дни календаря",
+        path: "/content/calendar-days",
+      },
+      {
         key: "/content/facets/culture",
         label: "Фасеты культур",
         path: "/content/facets/culture",
